@@ -169,16 +169,16 @@ static void capture_sst_sd(test_cond_value_t* test_cond_value, uint8_t *sst, uin
   switch (test_cond_value->type) {
     case OCTET_STRING_TEST_COND_VALUE: {
       if (test_cond_value->octet_string_value->len == 1) {
-        *sst = test_cond_value->octet_string_value->buf[0];
+        *sst = test_cond_value->octet_string_value->buf[0] - '0';
         *sd = NULL;
       } else {
         DevAssert(test_cond_value->octet_string_value->len == 4);
         uint8_t *buf = test_cond_value->octet_string_value->buf;
         *sst = buf[0];
-        *sd = malloc(sizeof(uint32_t));
+        *sd = malloc(**sd);
         **sd = buf[1] << 16 | buf[2] << 8 | buf[3];
       }
-      printf("[E2 AGENT][E2SM-KPM] Condition NSSAI (%d, %x).\n", *sst, (*sd) ? **sd : 0xffffff);
+      printf("[E2 AGENT][E2SM-KPM] Condition NSSAI (%d, %x).\n", *sst, (*sd) ? **sd : 0x000000);
       break;
     }
     default:
@@ -189,7 +189,7 @@ static void capture_sst_sd(test_cond_value_t* test_cond_value, uint8_t *sst, uin
 static bool nssai_matches(nssai_t a_nssai, uint8_t b_sst, const uint32_t *b_sd)
 {
   if (b_sd == NULL) {
-    return a_nssai.sst == b_sst && a_nssai.sd == 0xffffff;
+    return a_nssai.sst == b_sst && a_nssai.sd == 0x000000;
   } else {
     AssertFatal(*b_sd <= 0xffffff, "illegal SD %d\n", *b_sd);
     return a_nssai.sst == b_sst && a_nssai.sd == *b_sd;
@@ -380,11 +380,9 @@ static kpm_ric_ind_hdr_format_1_t kpm_ind_hdr_frm_1(void)
 
   hdr_frm_1.fileformat_version = NULL;
 
-  // Check E2 Node NG-RAN Type
-  const ngran_node_t node_type = get_e2_node_type();
-  const char* sender_name = get_ngran_name(node_type);
-  hdr_frm_1.sender_name = calloc(1, sizeof(byte_array_t));
-  *hdr_frm_1.sender_name = cp_str_to_ba(sender_name);
+  const char* vendor_name = "iosmcn";
+  hdr_frm_1.vendor_name = calloc(1, sizeof(byte_array_t));
+  *hdr_frm_1.vendor_name = cp_str_to_ba(vendor_name);
 
   return hdr_frm_1;
 }

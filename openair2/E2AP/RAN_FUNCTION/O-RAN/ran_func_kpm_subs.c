@@ -199,6 +199,36 @@ static meas_record_lst_t fill_RRU_PrbTotUl(__attribute__((unused))uint32_t gran_
 
   return meas_record;
 }
+
+static meas_record_lst_t fill_RRC_UE_ID(__attribute__((unused))uint32_t gran_period_ms, cudu_ue_info_pair_t ue_info, const size_t ue_idx, e2_node_level_stats_t* node_stats)
+{
+  meas_record_lst_t meas_record = {0};
+
+  meas_record.value = INTEGER_MEAS_VALUE;
+
+  meas_record.int_val = ue_info.rrc_ue_id;
+
+  return meas_record;
+}
+
+static meas_record_lst_t fill_RRU_Load(__attribute__((unused))uint32_t gran_period_ms, cudu_ue_info_pair_t ue_info, const size_t ue_idx, e2_node_level_stats_t* node_stats)
+{
+  meas_record_lst_t meas_record = {0};
+
+  gNB_MAC_INST *mac = RC.nrmac[0];
+  const mac_stats_t *stat = &mac->mac_stats;
+  static mac_stats_t last = {0};
+  int diff_used = stat->used_prb_aggregate - last.used_prb_aggregate;
+  int diff_total = stat->total_prb_aggregate - last.total_prb_aggregate;
+  int load = diff_total > 0 ? 100 * diff_used / diff_total : 0;
+  last = *stat;
+
+  meas_record.value = INTEGER_MEAS_VALUE;
+
+  meas_record.int_val = load;
+
+  return meas_record;
+}
 #endif
 
 static kv_measure_t lst_measure[] = {
@@ -209,7 +239,9 @@ static kv_measure_t lst_measure[] = {
   {.key = "DRB.UEThpDl", .value =  fill_DRB_UEThpDl }, 
   {.key = "DRB.UEThpUl", .value =  fill_DRB_UEThpUl }, 
   {.key = "RRU.PrbTotDl", .value =  fill_RRU_PrbTotDl }, 
-  {.key = "RRU.PrbTotUl", .value =  fill_RRU_PrbTotUl }, 
+  {.key = "RRU.PrbTotUl", .value =  fill_RRU_PrbTotUl },
+  {.key = "RRC.UEID", .value =  fill_RRC_UE_ID },
+  {.key = "RRU.Load", .value =  fill_RRU_Load }, 
 #endif
 }; 
 

@@ -490,6 +490,11 @@ typedef struct gNB_RRC_INST_s {
 
   RB_HEAD(rrc_cuup_tree, nr_rrc_cuup_container_t) cuups; // CU-UPs, indexed by assoc_id
   size_t num_cuups;
+  int xn_handover_success;
+  int xn_handover_triggered;
+  int rrc_setup;
+  int rrc_setup_complete;
+  double ho_xn_latency;
 
   RB_HEAD(rrc_neigh_cell_tree, nr_rrc_neighcells_container_t) neighs; // Neighbouring cells, indexed by assoc_id
   size_t num_neighs;

@@ -28,6 +28,7 @@
 #include "../../flexric/src/agent/e2_agent_api.h"
 #include "openair2/E2AP/flexric/src/lib/sm/enc/enc_ue_id.h"
 #include "openair2/E2AP/flexric/src/sm/rc_sm/rc_sm_id.h"
+#include "rc_ctrl_service_style_3.h"
 
 #include <stdio.h>
 #include <unistd.h>
@@ -899,41 +900,58 @@ sm_ag_if_ans_t write_ctrl_rc_sm(void const* data)
   assert(ctrl->hdr.format == FORMAT_1_E2SM_RC_CTRL_HDR && "Indication Header Format received not valid");
   assert(ctrl->msg.format == FORMAT_1_E2SM_RC_CTRL_MSG && "Indication Message Format received not valid");
   assert(ctrl->hdr.frmt_1.ctrl_act_id == 2 && "Currently only QoS flow mapping configuration supported");
+  if(ctrl->hdr.frmt_1.ric_style_type == 1 && ctrl->hdr.frmt_1.ctrl_act_id == 2) {
+    printf("QoS flow mapping configuration\n");
 
-  printf("QoS flow mapping configuration\n");
+    const seq_ran_param_t* ran_param = ctrl->msg.frmt_1.ran_param;
 
-  const seq_ran_param_t* ran_param = ctrl->msg.frmt_1.ran_param;
-
-  // DRB ID
-  assert(ran_param[0].ran_param_id == 1 && "First RAN Parameter ID has to be DRB ID");
-  assert(ran_param[0].ran_param_val.type == ELEMENT_KEY_FLAG_TRUE_RAN_PARAMETER_VAL_TYPE);
-  printf("DRB ID %ld \n", ran_param[0].ran_param_val.flag_true->int_ran);
+    // DRB ID
+    assert(ran_param[0].ran_param_id == 1 && "First RAN Parameter ID has to be DRB ID");
+    assert(ran_param[0].ran_param_val.type == ELEMENT_KEY_FLAG_TRUE_RAN_PARAMETER_VAL_TYPE);
+    printf("DRB ID %ld \n", ran_param[0].ran_param_val.flag_true->int_ran);
 
 
-  // List of QoS Flows to be modified in DRB
-  assert(ran_param[1].ran_param_id == 2 && "Second RAN Parameter ID has to be List of QoS Flows");
-  assert(ran_param[1].ran_param_val.type == LIST_RAN_PARAMETER_VAL_TYPE);
-  printf("List of QoS Flows to be modified in DRB\n");
-  const lst_ran_param_t* lrp = ran_param[1].ran_param_val.lst->lst_ran_param;
+    // List of QoS Flows to be modified in DRB
+    assert(ran_param[1].ran_param_id == 2 && "Second RAN Parameter ID has to be List of QoS Flows");
+    assert(ran_param[1].ran_param_val.type == LIST_RAN_PARAMETER_VAL_TYPE);
+    printf("List of QoS Flows to be modified in DRB\n");
+    const lst_ran_param_t* lrp = ran_param[1].ran_param_val.lst->lst_ran_param;
 
-  // The following assertion should be true, but there is a bug in the std
-  // check src/sm/rc_sm/enc/rc_enc_asn.c:1085 and src/sm/rc_sm/enc/rc_enc_asn.c:984 
-  // assert(lrp->ran_param_struct.ran_param_struct[0].ran_param_id == 3);
+    // The following assertion should be true, but there is a bug in the std
+    // check src/sm/rc_sm/enc/rc_enc_asn.c:1085 and src/sm/rc_sm/enc/rc_enc_asn.c:984 
+    // assert(lrp->ran_param_struct.ran_param_struct[0].ran_param_id == 3);
 
-  // QoS Flow Identifier
-  assert(lrp->ran_param_struct.ran_param_struct[0].ran_param_id == 4);
-  assert(lrp->ran_param_struct.ran_param_struct[0].ran_param_val.type == ELEMENT_KEY_FLAG_TRUE_RAN_PARAMETER_VAL_TYPE);
-  int64_t qfi = lrp->ran_param_struct.ran_param_struct[0].ran_param_val.flag_true->int_ran;
-  assert(qfi > -1 && qfi < 65);
+    // QoS Flow Identifier
+    assert(lrp->ran_param_struct.ran_param_struct[0].ran_param_id == 4);
+    assert(lrp->ran_param_struct.ran_param_struct[0].ran_param_val.type == ELEMENT_KEY_FLAG_TRUE_RAN_PARAMETER_VAL_TYPE);
+    int64_t qfi = lrp->ran_param_struct.ran_param_struct[0].ran_param_val.flag_true->int_ran;
+    assert(qfi > -1 && qfi < 65);
 
-  // QoS Flow Mapping Indication
-  assert(lrp->ran_param_struct.ran_param_struct[1].ran_param_id == 5);
-  assert(lrp->ran_param_struct.ran_param_struct[1].ran_param_val.type == ELEMENT_KEY_FLAG_FALSE_RAN_PARAMETER_VAL_TYPE);
-  int64_t dir = lrp->ran_param_struct.ran_param_struct[1].ran_param_val.flag_false->int_ran;
-  assert(dir == 0 || dir == 1);
+    // QoS Flow Mapping Indication
+    assert(lrp->ran_param_struct.ran_param_struct[1].ran_param_id == 5);
+    assert(lrp->ran_param_struct.ran_param_struct[1].ran_param_val.type == ELEMENT_KEY_FLAG_FALSE_RAN_PARAMETER_VAL_TYPE);
+    int64_t dir = lrp->ran_param_struct.ran_param_struct[1].ran_param_val.flag_false->int_ran;
+    assert(dir == 0 || dir == 1);
 
-  printf("qfi = %ld, dir %ld \n", qfi, dir);
+    printf("qfi = %ld, dir %ld \n", qfi, dir);
+  #if defined(NGRAN_GNB_DU) || defined(NGRAN_GNB_CUCP)
+  } else if (ctrl->hdr.frmt_1.ric_style_type == 3 && ctrl->hdr.frmt_1.ctrl_act_id == Handover_Control_7_6_4_1) {
+      uint8_t *ran_ue_id_octet_string = ctrl->hdr.frmt_1.ue_id.gnb.ran_ue_id;
 
+      uint64_t ran_ue_id = 0;
+      for (int i = 0; i < 8; i++) {
+          ran_ue_id = (ran_ue_id << 8) | ran_ue_id_octet_string[i];
+      }
+      printf("[xApp]    Handover triggered for the UE_ID %ld \n", ran_ue_id);
+      bool rc = handover_ue(ran_ue_id);
+      if(!rc)
+        printf("[xApp]    Handover Failed for UE_ID %ld \n", ran_ue_id);
+      else
+        printf("[xApp]    Handover successfull for UE_ID %ld \n", ran_ue_id);
+  #endif
+  } else {
+      assert(0!=0 && "unknown ric_style_type and ctrl_act_id\n");
+  }
 
   sm_ag_if_ans_t ans = {.type = CTRL_OUTCOME_SM_AG_IF_ANS_V0};
   ans.ctrl_out.type = RAN_CTRL_V1_3_AGENT_IF_CTRL_ANS_V0;

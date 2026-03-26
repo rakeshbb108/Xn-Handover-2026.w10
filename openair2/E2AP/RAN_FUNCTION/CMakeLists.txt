@@ -66,6 +66,7 @@ add_library(e2_ran_func_du_cucp_cuup STATIC
             O-RAN/ran_func_kpm_subs.c
             O-RAN/ran_func_rc.c
             O-RAN/ran_func_rc_subs.c
+            O-RAN/rc_ctrl_service_style_3.c
             ../flexric/src/sm/rc_sm/ie/rc_data_ie.c
             CUSTOMIZED/ran_func_gtp.c
             CUSTOMIZED/ran_func_pdcp.c
