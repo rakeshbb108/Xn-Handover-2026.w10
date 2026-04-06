@@ -1997,6 +1997,7 @@ bool nr_check_Msg4_MsgB_Ack(module_id_t module_id, frame_t frame, slot_t slot, N
       }
     } else {
       LOG_I(NR_MAC, "%4d.%2d UE %04x: RA Procedure failed at %s!\n", frame, slot, UE->rnti, ra_type_str);
+      LOG_I(NR_MAC, "Calling trigger UL failure from nr_check_Msg4_MsgB_Ack\n");
       nr_mac_trigger_ul_failure(sched_ctrl, UE->current_DL_BWP.scs);
     }
 

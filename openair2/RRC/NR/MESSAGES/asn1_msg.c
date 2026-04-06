@@ -85,8 +85,8 @@
 #include "NR_PagingRecord.h"
 #include "NR_UE-CapabilityRequestFilterNR.h"
 #include "NR_HandoverPreparationInformation.h"
-#include "NR_HandoverPreparationInformation-IEs.h"
 #include "NR_HandoverCommand.h"
+#include "NR_HandoverPreparationInformation-IEs.h"
 #include "NR_UE-CapabilityRAT-ContainerList.h"
 #include "common/utils/nr/nr_common.h"
 #if defined(NR_Rel16)
@@ -215,7 +215,6 @@ struct NR_UE_NR_Capability *get_ue_nr_capability(int rnti, uint8_t *buf, uint32_
     LOG_W(NR_MAC, "UE RNTI %04x: Failed to decode container list\n", rnti);
     return NULL;
   }
-
   NR_UE_NR_Capability_t *cap = decode_nr_ue_capability(rnti, clist);
   ASN_STRUCT_FREE(asn_DEF_NR_UE_CapabilityRAT_ContainerList, clist);
   return cap;
@@ -246,7 +245,6 @@ NR_UE_NR_Capability_t *decode_nr_ue_capability(int rnti, const NR_UE_CapabilityR
 }
 
 //------------------------------------------------------------------------------
-
 int do_SIB2_NR(uint8_t **msg_SIB2, NR_SSB_MTC_t *ssbmtc)
 {
   NR_SIB2_t *sib2 = calloc(1, sizeof(*sib2));

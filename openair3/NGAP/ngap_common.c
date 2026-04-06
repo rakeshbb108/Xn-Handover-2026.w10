@@ -145,6 +145,16 @@ ngap_ambr_t decode_ngap_UEAggregateMaximumBitRate(const NGAP_UEAggregateMaximumB
 nssai_t decode_ngap_nssai(const NGAP_S_NSSAI_t *in)
 {
   nssai_t nssai = {0};
+  if (in == NULL) {
+    printf("decode_ngap_nssai: NULL input!\n");
+    return nssai;
+  }
+
+  if (in->sST.buf == NULL || in->sST.size == 0) {
+    printf("decode_ngap_nssai: invalid sST\n");
+    return nssai;
+  }
+
   OCTET_STRING_TO_INT8(&in->sST, nssai.sst);
   if (in->sD != NULL) {
     BUFFER_TO_INT24(in->sD->buf, nssai.sd);
@@ -152,6 +162,16 @@ nssai_t decode_ngap_nssai(const NGAP_S_NSSAI_t *in)
     nssai.sd = 0xffffff;
   }
   return nssai;
+}
+
+void encode_ngap_security_capabilities(NGAP_UESecurityCapabilities_t *out,const ngap_security_capabilities_t *in){
+  if (!out || !in) {
+        return;
+  }
+  ENCRALG_TO_BIT_STRING(in->nRencryption_algorithms, &out->nRencryptionAlgorithms);
+  ENCRALG_TO_BIT_STRING(in->eUTRAencryption_algorithms, &out->eUTRAencryptionAlgorithms);
+  INTPROTALG_TO_BIT_STRING(in->nRintegrity_algorithms, &out->nRintegrityProtectionAlgorithms);
+  INTPROTALG_TO_BIT_STRING(in->eUTRAintegrity_algorithms, &out->eUTRAintegrityProtectionAlgorithms);
 }
 
 ngap_security_capabilities_t decode_ngap_security_capabilities(const NGAP_UESecurityCapabilities_t *in)

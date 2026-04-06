@@ -19,30 +19,114 @@
  *      contact@openairinterface.org
  */
 
+/*! \file xnap_common.c
+ * \brief xnap encoder,decoder dunctions for gNB
+ * \author Sreeshma Shiv <sreeshmau@iisc.ac.in>
+ * \date Dec 2023
+ * \version 1.0
+ */
+
+#include <stdio.h>
+#include <string.h>
 #include <stdint.h>
+
+#include "assertions.h"
+#include "conversions.h"
+#include "intertask_interface.h"
 #include "xnap_common.h"
-#include "XNAP_XnAP-PDU.h"
 
-ssize_t XNAP_generate_initiating_message(uint8_t **buffer,
-                                         uint32_t *length,
-                                         XNAP_ProcedureCode_t procedureCode,
-                                         XNAP_Criticality_t criticality,
-                                         asn_TYPE_descriptor_t *td,
-                                         void *sptr)
+int xnap_gNB_encode_pdu(XNAP_XnAP_PDU_t *pdu, uint8_t **buffer, uint32_t *len)
 {
-  XNAP_XnAP_PDU_t pdu;
   ssize_t encoded;
-  memset(&pdu, 0, sizeof(XNAP_XnAP_PDU_t));
-  pdu.present = XNAP_XnAP_PDU_PR_initiatingMessage;
-  pdu.choice.initiatingMessage->procedureCode = procedureCode;
-  pdu.choice.initiatingMessage->criticality = criticality;
-  ANY_fromType_aper((ANY_t *)&pdu.choice.initiatingMessage->value, td, sptr);
 
-  if ((encoded = aper_encode_to_new_buffer(&asn_DEF_XNAP_XnAP_PDU, 0, &pdu, (void **)buffer)) < 0) {
+  DevAssert(pdu != NULL);
+  DevAssert(buffer != NULL);
+  DevAssert(len != NULL);
+
+  xer_fprint(stdout, &asn_DEF_XNAP_XnAP_PDU, (void *)pdu);
+
+  encoded = aper_encode_to_new_buffer(&asn_DEF_XNAP_XnAP_PDU, 0, pdu, (void **)buffer);
+
+  if (encoded < 0) {
     return -1;
   }
 
-  *length = encoded;
+  *len = encoded;
+
   return encoded;
 }
 
+int xnap_gNB_decode_pdu(XNAP_XnAP_PDU_t *pdu, const uint8_t *const buffer, uint32_t length)
+{
+  asn_dec_rval_t dec_ret;
+
+  DevAssert(buffer != NULL);
+
+  dec_ret = aper_decode(NULL, &asn_DEF_XNAP_XnAP_PDU, (void **)&pdu, buffer, length, 0, 0);
+  xer_fprint(stdout, &asn_DEF_XNAP_XnAP_PDU, pdu);
+  if (dec_ret.code != RC_OK) {
+    LOG_E(XNAP, "Failed to decode PDU\n");
+    return -1;
+  }
+  return 0;
+}
+
+
+int xnap_gNB_set_cause(XNAP_Cause_t *cause_p,const xnap_cause_t *in)
+{
+  DevAssert(cause_p != NULL);
+  switch (in->type) {
+    case XNAP_CAUSE_RADIO_NETWORK:
+      cause_p->present = XNAP_Cause_PR_radioNetwork;
+      cause_p->choice.radioNetwork = in->value;
+      break;
+    case XNAP_CAUSE_TRANSPORT:
+      cause_p->present = XNAP_Cause_PR_transport;
+      cause_p->choice.transport = in->value;
+      break;
+    case XNAP_CAUSE_PROTOCOL:
+      cause_p->present = XNAP_Cause_PR_protocol;
+      cause_p->choice.protocol = in->value;
+      break;
+    case XNAP_CAUSE_MISC:
+      cause_p->present = XNAP_Cause_PR_misc;
+      cause_p->choice.misc = in->value;
+      break;
+    case XNAP_CAUSE_NOTHING:
+    default:
+      cause_p->present = XNAP_Cause_PR_NOTHING;
+      break;
+  }
+  return 0;
+}
+
+xnap_cause_t decode_xnap_cause(const XNAP_Cause_t *in){
+  xnap_cause_t out = {0};
+  switch (in->present) {
+     case XNAP_Cause_PR_radioNetwork:
+         out.type = XNAP_CAUSE_RADIO_NETWORK;
+         out.value = in->choice.radioNetwork;
+         break;
+
+     case XNAP_Cause_PR_transport:
+         out.type = XNAP_CAUSE_TRANSPORT;
+         out.value = in->choice.transport;
+         break;
+
+     case XNAP_Cause_PR_protocol:
+         out.type = XNAP_CAUSE_PROTOCOL;
+         out.value = in->choice.protocol;
+         break;
+
+     case XNAP_Cause_PR_misc:
+         out.type = XNAP_CAUSE_MISC;
+         out.value = in->choice.misc;
+         break;
+  
+     default:
+         out.type = XNAP_CAUSE_RADIO_NETWORK;
+         LOG_E(XNAP, "Unknown failure cause %d\n", in->present);
+         break;
+   }
+   return out;
+}

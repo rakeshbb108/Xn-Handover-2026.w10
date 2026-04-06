@@ -81,6 +81,7 @@ typedef struct IttiMsgText_s {
 #include <openair2/RRC/LTE/rrc_types.h>
 #include <openair2/COMMON/rrc_messages_types.h>
 #include <openair2/COMMON/e1ap_messages_types.h>
+#include <openair2/COMMON/xnap_messages_types.h>
 
 #include <openair3/NAS/COMMON/UTIL/OctetString.h>
 #include <openair3/NAS/COMMON/IES/AccessPointName.h>
@@ -297,6 +298,7 @@ typedef struct {
   TASK_DEF(TASK_NGAP, 200)            \
   TASK_DEF(TASK_NRPPA, 200)           \
   TASK_DEF(TASK_X2AP, 200)            \
+  TASK_DEF(TASK_XNAP, 200)            \
   TASK_DEF(TASK_M2AP_ENB, 200)        \
   TASK_DEF(TASK_M2AP_MCE, 200)        \
   TASK_DEF(TASK_M3AP, 200)            \

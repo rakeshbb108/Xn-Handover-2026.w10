@@ -3509,7 +3509,6 @@ static int nr_mac_interrupt_ue_transmission(gNB_MAC_INST *mac, NR_UE_info_t *UE,
   DevAssert(mac != NULL);
   DevAssert(UE != NULL);
   NR_SCHED_ENSURE_LOCKED(&mac->sched_lock);
-
   nr_timer_setup(&UE->UE_sched_ctrl.transm_interrupt, slots, 1);
   nr_timer_start(&UE->UE_sched_ctrl.transm_interrupt);
 
@@ -3890,6 +3889,8 @@ void nr_mac_trigger_ul_failure(NR_UE_sched_ctrl_t *sched_ctrl, NR_SubcarrierSpac
     /* already running */
     return;
   }
+  LOG_I(NR_MAC, "DTX count: %d\n", sched_ctrl->pusch_consecutive_dtx_cnt);
+  LOG_I(NR_MAC, "Inside nr_mac_trigger_ul_failure ul failure set to True\n"); 
   sched_ctrl->ul_failure = true;
   // UL_FAILURE_TIMEOUT ms till triggering release request
   // UL_FAILURE_REQ_GRACE ms till automatically released after request
@@ -3898,6 +3899,8 @@ void nr_mac_trigger_ul_failure(NR_UE_sched_ctrl_t *sched_ctrl, NR_SubcarrierSpac
 
 void nr_mac_reset_ul_failure(NR_UE_sched_ctrl_t *sched_ctrl)
 {
+  LOG_I(NR_MAC, "DTX count: %d\n", sched_ctrl->pusch_consecutive_dtx_cnt);
+  LOG_I(NR_MAC, "Inside nr_mac_reset_ul_failure ul failure set to False\n"); 
   sched_ctrl->ul_failure = false;
   sched_ctrl->ul_failure_timer = 0;
   sched_ctrl->pusch_consecutive_dtx_cnt = 0;

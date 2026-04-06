@@ -75,6 +75,7 @@ typedef enum {
 
 /* TS 36.331: RRC-TransactionIdentifier ::= INTEGER (0..3) */
 #define NR_RRC_TRANSACTION_IDENTIFIER_NUMBER 4
+#define MAX_NUM_NR_NEIGH_CELLs 6 /* maximum neighbouring cells number */
 
 typedef struct UE_S_TMSI_NR_s {
   bool                                                presence;
@@ -209,7 +210,7 @@ typedef struct gNB_RRC_UE_s {
 
   bool as_security_active;
   bool f1_ue_context_active;
-
+  
   byte_array_t ue_cap_buffer;
   NR_UE_NR_Capability_t*             UE_Capability_nr;
   int                                UE_Capability_size;
@@ -242,6 +243,10 @@ typedef struct gNB_RRC_UE_s {
 
   uint32_t                           rrc_ue_id;
   uint64_t amf_ue_ngap_id;
+
+  //CP-TNL address
+  transport_layer_addr_t amf_ng_ip;
+
   // Globally Unique AMF Identifier
   nr_guami_t ue_guami;
   // Serving PLMN of the UE
@@ -270,6 +275,7 @@ typedef struct gNB_RRC_UE_s {
   uint32_t                           ue_reconfiguration_counter;
   bool ongoing_reconfiguration;
   bool an_release; // flag if core requested UE release
+  bool rrc_release; // flag for UE context release only at gNB
 
   /* NGUEContextSetup might come with PDU sessions, but setup needs to be
    * delayed after security (and capability); PDU sessions are stored here */
@@ -439,6 +445,14 @@ typedef struct nr_rrc_cuup_container_t {
   sctp_assoc_t assoc_id;
 } nr_rrc_cuup_container_t;
 
+typedef struct nr_rrc_neighcells_container_t {
+  /* Tree-related data */
+  RB_ENTRY(nr_rrc_neighcells_container_t) entries;
+
+  uint32_t gNB_id;
+  sctp_assoc_t assoc_id;
+} nr_rrc_neighcells_container_t;
+
 //---NR---(completely change)---------------------
 typedef struct gNB_RRC_INST_s {
 
@@ -477,6 +491,9 @@ typedef struct gNB_RRC_INST_s {
   RB_HEAD(rrc_cuup_tree, nr_rrc_cuup_container_t) cuups; // CU-UPs, indexed by assoc_id
   size_t num_cuups;
 
+  RB_HEAD(rrc_neigh_cell_tree, nr_rrc_neighcells_container_t) neighs; // Neighbouring cells, indexed by assoc_id
+  size_t num_neighs;
+  
   // PDCP configuration parameters loaded during startup
   nr_pdcp_configuration_t pdcp_config;
   nr_rlc_configuration_t rlc_config;

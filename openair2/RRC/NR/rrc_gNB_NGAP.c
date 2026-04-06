@@ -94,6 +94,7 @@
 #include "rrc_cell_management.h"
 #include "common/utils/alg/find.h"
 #include "common/utils/nr/nr_common.h"
+#include "rrc_gNB_XNAP.h"
 
 #ifdef E2_AGENT
 #include "openair2/E2AP/RAN_FUNCTION/O-RAN/ran_func_rc_extern.h"
@@ -111,13 +112,11 @@ static const uint16_t NGAP_INTEGRITY_NIA3_MASK = 0x2000;
 
 #define INTEGRITY_ALGORITHM_NONE NR_IntegrityProtAlgorithm_nia0
 
-static void set_UE_security_algos(const gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, const ngap_security_capabilities_t *cap);
-
 /** @brief Validates PLMN against allowed PLMN list and returns pointer to matching PLMN
  * @param rrc RRC instance
  * @param plmn PLMN to validate
  * @return pointer to matching PLMN in configuration, or NULL if not found */
-static const plmn_id_t *get_serving_plmn(gNB_RRC_INST *rrc, const plmn_id_t *plmn)
+const plmn_id_t *get_serving_plmn(gNB_RRC_INST *rrc, const plmn_id_t *plmn)
 {
   // Find matching PLMN in configuration
   for (int idx = 0; idx < rrc->configuration.num_plmn; idx++) {
@@ -392,6 +391,16 @@ bool trigger_bearer_setup(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, int n, pdusession
       LOG_E(NR_RRC, "Could not add PDU Session %d for UE %d\n", sessions[i].pdusession_id, UE->rrc_ue_id);
       continue;
     }
+//    // Deep-copy the QoS seq_arr from the caller's temporary stack buffer
+//    // into the persistently stored pduSession, so we don't hold a dangling
+//    // pointer into sessions[i].qos after trigger_bearer_setup returns.
+//    seq_arr_t *dst = &pduSession->param.qos;
+//    const seq_arr_t *src = &sessions[i].qos;
+//    seq_arr_init(dst, sizeof(pdusession_level_qos_parameter_t));
+//    for (size_t q = 0; q < seq_arr_size(src); q++) {
+//      const void *elem = seq_arr_at(src, q);
+//      seq_arr_push_back(dst, elem, sizeof(pdusession_level_qos_parameter_t));
+//    }
     pdusession_t *session = &pduSession->param;
     // Fill E1 Bearer Context Modification Request
     bearer_req.gNB_cu_cp_ue_id = UE->rrc_ue_id;
@@ -496,6 +505,15 @@ int rrc_gNB_process_NGAP_INITIAL_CONTEXT_SETUP_REQ(MessageDef *msg_p, instance_t
   gNB_RRC_UE_t *UE = &ue_context_p->ue_context;
 
   UE->amf_ue_ngap_id = req->amf_ue_ngap_id;
+  
+  if (req->amf_ng_ip.ipv4){
+    struct in_addr ipv4_bin;
+    if (inet_pton(AF_INET, req->amf_ng_ip.ipv4_address, &ipv4_bin) == 1) {
+        memcpy(UE->amf_ng_ip.buffer, &ipv4_bin, 4);
+        UE->amf_ng_ip.length = 4;
+    };
+  }
+  LOG_D(NR_RRC, "Copying AMF_IP IPv4: %s into UE struct.\n", inet_ntoa(*(struct in_addr *)UE->amf_ng_ip.buffer));
 
   // Directly copy the entire guami structure
   UE->ue_guami = req->guami;
@@ -724,7 +742,7 @@ static e_NR_IntegrityProtAlgorithm rrc_gNB_select_integrity(const gNB_RRC_INST *
  * \param UE      UE context
  * \param cap     security capabilities for this UE
  */
-static void set_UE_security_algos(const gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, const ngap_security_capabilities_t *cap)
+void set_UE_security_algos(const gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, const ngap_security_capabilities_t *cap)
 {
   /* Save security parameters */
   UE->security_capabilities = *cap;
@@ -909,7 +927,6 @@ void rrc_gNB_process_NGAP_PDUSESSION_SETUP_REQ(MessageDef *msg_p, instance_t ins
   }
 
   UE->amf_ue_ngap_id = msg->amf_ue_ngap_id;
-
 
   pdusession_t to_setup[NGAP_MAX_PDU_SESSION] = {0};
   for (int i = 0; i < msg->nb_pdusessions_tosetup; ++i)
@@ -1828,3 +1845,125 @@ int rrc_gNB_process_NGAP_DL_RAN_STATUS_TRANSFER(MessageDef *msg_p, instance_t in
 
   return 0;
 }
+
+/** @brief Prepare NGAP PATH SWITCH REQUEST */
+void rrc_gNB_send_NGAP_PATH_SWITCH_REQUEST(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE)
+{
+  LOG_I(NR_RRC, "Triggering NGAP PATH SWITCH REQUEST\n");
+
+  MessageDef *msg_p = itti_alloc_new_message(TASK_RRC_GNB, 0, NGAP_PATH_SWITCH_REQ);
+  ngap_path_switch_req_t *psr_req = &NGAP_PATH_SWITCH_REQ(msg_p);
+  memset(psr_req, 0, sizeof(*psr_req));
+
+  nr_rrc_cell_container_t *cell = rrc_get_pcell_for_ue(rrc, UE);
+  user_location_information_t user_loc_info = {.nrCellIdentity   = cell->info.cell_id,
+                                    .target_ng_ran.tac           = cell->info.tac,
+                                    .target_ng_ran.targetgNBId   = rrc->node_id,
+                                    .target_ng_ran.plmn_identity = cell->info.plmn};
+  
+  psr_req->gNB_ue_ngap_id = UE->rrc_ue_id;
+  psr_req->amf_ue_ngap_id = UE->amf_ue_ngap_id;
+  psr_req->user_info      = user_loc_info;
+  psr_req->security_capabilities = UE->security_capabilities;
+ 
+  psr_req->nb_of_pdusessions = 0;
+  FOR_EACH_SEQ_ARR(rrc_pdu_session_param_t*, session, &UE->pduSessions) {
+    if (session->status != PDU_SESSION_STATUS_ESTABLISHED &&
+        session->status != PDU_SESSION_STATUS_DONE)
+      continue;
+    DevAssert(psr_req->nb_of_pdusessions < NGAP_MAX_PDU_SESSION);
+    int idx = psr_req->nb_of_pdusessions++;
+    pdusession_t *param = &session->param;
+    psr_req->pdusessions_tobeswitched[idx].pdusession_id = param->pdusession_id;
+    psr_req->pdusessions_tobeswitched[idx].n3_outgoing = param->n3_outgoing;
+    psr_req->pdusessions_tobeswitched[idx].nb_of_qos_flow = 0;
+    FOR_EACH_SEQ_ARR(pdusession_level_qos_parameter_t*, qp, &param->qos) {
+      DevAssert(psr_req->pdusessions_tobeswitched[idx].nb_of_qos_flow < MAX_QOS_FLOWS);
+      int qidx = psr_req->pdusessions_tobeswitched[idx].nb_of_qos_flow++;
+      psr_req->pdusessions_tobeswitched[idx].associated_qos_flows[qidx].qfi = qp->qfi;
+    }
+  }
+
+  itti_send_msg_to_task(TASK_NGAP, rrc->module_id, msg_p);
+}
+ 
+int rrc_gNB_process_NGAP_PATH_SWITCH_REQUEST_ACKNOWLEDGEMENT(gNB_RRC_INST *rrc, instance_t instance, ngap_path_switch_req_ack_t *msg){
+
+ LOG_I(NR_RRC, "Processing NGAP PATH SWITCH REQUEST ACKNOWLEDGE message \n");
+ rrc_gNB_ue_context_t *ue_context_p = rrc_gNB_get_ue_context(rrc, msg->gNB_ue_ngap_id);
+
+ if(!ue_context_p){
+    LOG_E(NR_RRC, "[gNB %ld] No UE context for gNB_UE_ngap_id : %u \n", instance, msg->gNB_ue_ngap_id); 
+ }
+
+ gNB_RRC_UE_t *UE = &ue_context_p->ue_context;
+ LOG_I(NR_RRC, 
+             "[gNB %ld] Path Switch Request Acknowledgement from AMF, amf_ue_ngap_id %lu -> gNB_ue_ngap_id %u \n",
+             instance,
+             msg->amf_ue_ngap_id,
+             msg->gNB_ue_ngap_id);
+
+ UE->nh_ncc = msg->nh_ncc;
+ memcpy(UE->nh, &msg->next_security_key, SECURITY_KEY_LENGTH); //
+ LOG_I(NR_RRC, "[XN-HO] Update Security Context with NH and next hop chain count increased to %d\n", UE->nh_ncc); 
+ LOG_I(NR_RRC, "[XN-HO] Total number of PDU Sessions Switched = %d \n", msg->nb_of_pdusessions);
+ for(int i = 0; i < msg->nb_of_pdusessions; ++i){
+    psr_ack_transfer_t *switched = &msg->pdusessions_switched[i];
+    int target_id = switched->pdusession_id;
+    bool found = false;
+    FOR_EACH_SEQ_ARR(rrc_pdu_session_param_t*, session, &UE->pduSessions) {
+      if (session->param.pdusession_id != target_id)
+        continue;
+      found = true;
+      if (switched->has_n3_info) {
+        session->param.n3_incoming = switched->n3_incoming;
+        LOG_I(NR_RRC,
+              "[XN-HO] Updated N3 tunnel for PDU session %d\n",
+              target_id);
+      }
+      if (switched->has_sec_ind) {
+        // Integrity
+        switch (switched->sec_indication.integrity_protection_ind) {
+          case NGAP_SEC_REQUIRED:
+            LOG_D(NR_RRC,
+                  "Integrity REQUIRED for PDU %d\n", target_id);
+            break;
+          case NGAP_SEC_PREFERRED:
+            LOG_D(NR_RRC,
+                  "Integrity PREFERRED for PDU %d\n", target_id);
+            break;
+          case NGAP_SEC_NOT_NEEDED:
+            LOG_D(NR_RRC,
+                  "Integrity NOT needed for PDU %d\n", target_id);
+            break;
+        }
+        // Confidentiality
+        switch (switched->sec_indication.confidentiality_protextion_ind) {
+          case NGAP_SEC_REQUIRED:
+            LOG_D(NR_RRC,
+                  "Confidentiality REQUIRED for PDU %d\n", target_id);
+            break;
+          case NGAP_SEC_PREFERRED:
+            LOG_D(NR_RRC,
+                  "Confidentiality PREFERRED for PDU %d\n", target_id);
+            break;
+          case NGAP_SEC_NOT_NEEDED:
+            LOG_D(NR_RRC,
+                  "Confidentiality NOT needed for PDU %d\n", target_id);
+            break;
+        }
+      }
+      break; // stop searching once found
+    }
+
+    if (!found) {
+      LOG_W(NR_RRC,
+            "[XN-HO] PDU session %d not found in UE context\n",
+            target_id);
+    }
+ } 
+ // handle allowed nssai?
+ rrc_gNB_send_XNAP_UE_CONTEXT_RELEASE(rrc, UE); 
+ return 0;
+}
+

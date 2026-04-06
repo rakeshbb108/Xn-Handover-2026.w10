@@ -116,5 +116,10 @@
 #include "NGAP_DRBStatusDL.h"
 #include "NGAP_DRBStatusDL18.h"
 #include "NGAP_DRBStatusDL12.h"
+#include "NGAP_PDUSessionResourceToBeSwitchedDLItem.h"
+#include "NGAP_QosFlowAcceptedItem.h"
+#include "NGAP_PathSwitchRequestTransfer.h"
+#include "NGAP_PDUSessionResourceSwitchedItem.h"
+#include "NGAP_PathSwitchRequestAcknowledgeTransfer.h"
 
 #endif // NGAP_MSG_INCLUDES_H

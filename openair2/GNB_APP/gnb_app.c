@@ -54,6 +54,10 @@
 #include "gnb_config.h"
 #include "openair2/LAYER2/NR_MAC_gNB/mac_proto.h"
 #include "openair2/GNB_APP/gnb_config_ng.h"
+#include "openair2/XNAP/xnap_gNB_task.h"
+#include "openair2/XNAP/xnap_gNB_management_procedures.h"
+#include "openair3/NGAP/ngap_gNB_defs.h"
+#include "openair3/NGAP/ngap_gNB_management_procedures.h"
 
 extern RAN_CONTEXT_t RC;
 /*------------------------------------------------------------------------------*/
@@ -103,6 +107,81 @@ uint32_t gNB_app_register_x2(uint32_t gnb_id_start, uint32_t gnb_id_end) {
   return register_gnb_x2_pending;
 }
 
+/*================================================================================*/
+uint32_t gNB_app_register_xn(instance_t instance){
+  uint32_t                        gnb_nb = RC.nb_nr_inst;
+  uint32_t                        gnb_inst_start = 0;
+  uint32_t                        gnb_inst_end = gnb_inst_start + gnb_nb;
+  int                             register_gnb_xn_pending = 0;
+  struct                          served_guami_s *guami;
+  struct                          plmn_identity_s  *plmn;
+  struct                          served_region_id_s *region;
+       
+  ngap_gNB_amf_data_t             *amf_node;
+  ngap_gNB_instance_t *instance_p = ngap_gNB_get_instance(instance);
+  for(uint32_t gnb_inst = gnb_inst_start; (gnb_inst < gnb_inst_end) ; gnb_inst++){
+     MessageDef   *msg_p = itti_alloc_new_message (TASK_GNB_APP, 0, XNAP_REGISTER_GNB_REQ);
+     xnap_register_gnb_req_t *msg   = &XNAP_REGISTER_GNB_REQ(msg_p);
+      
+     // reading xnap net configuration 
+     msg->net_config  =   Read_IPconfig_Xn();      
+     // gNB ID
+     msg->setup_info.gNB_id = instance_p->gNB_id;
+     LOG_D(GNB_APP, "gNB_ID in Registering Xn Handover Procedure: %u \n", msg->setup_info.gNB_id);
+     msg->setup_info.plmn.mcc = instance_p->plmn[0].plmn.mcc; // correct?
+     msg->setup_info.plmn.mnc = instance_p->plmn[0].plmn.mnc;
+     msg->setup_info.plmn.mnc_digit_length = instance_p->plmn[0].plmn.mnc_digit_length;
+
+     // TAI support list
+     msg->setup_info.num_tai = 1; // as avilable now 
+     for(int i = 0; i< msg->setup_info.num_tai; i++){
+         msg->setup_info.tai_support[i].tac = instance_p->tac;
+         msg->setup_info.tai_support[i].num_plmn = instance_p->num_plmn;
+         for (int j = 0; j < instance_p->num_plmn; j++){
+             msg->setup_info.tai_support[i].plmn_support[j].plmn.mcc = instance_p->plmn[j].plmn.mcc;
+             msg->setup_info.tai_support[i].plmn_support[j].plmn.mnc = instance_p->plmn[j].plmn.mnc;;
+             msg->setup_info.tai_support[i].plmn_support[j].plmn.mnc_digit_length =  instance_p->plmn[j].plmn.mnc_digit_length;
+             msg->setup_info.tai_support[i].plmn_support[j].num_nssai = instance_p->plmn[j].num_nssai;
+             for (int k = 0; k < msg->setup_info.tai_support[i].plmn_support[j].num_nssai; k++){
+                 msg->setup_info.tai_support[i].plmn_support[j].s_nssai[k].sst = instance_p->plmn[j].s_nssai[k].sst;
+                 if(instance_p->plmn[j].s_nssai[k].sd)
+                   msg->setup_info.tai_support[i].plmn_support[j].s_nssai[k].sd  = instance_p->plmn[j].s_nssai[k].sd;
+             }
+         }
+     }
+     
+    // Global AMF Region IDs
+    int r = 0; 
+    /* Iterate over AMF tree */
+    RB_FOREACH(amf_node, ngap_amf_map, &instance_p->ngap_amf_head) {
+        /* Iterate over served GUAMIs */
+        STAILQ_FOREACH(guami, &amf_node->served_guami, next) {
+            /* Iterate over region IDs */
+            STAILQ_FOREACH(plmn, &guami->served_plmns, next) {
+               msg->setup_info.amf_region_info[r].plmn.mcc = plmn->mcc;
+               msg->setup_info.amf_region_info[r].plmn.mnc = plmn->mnc;
+               msg->setup_info.amf_region_info[r].plmn.mnc_digit_length = plmn->mnc_digit_length;
+            }
+ 
+            /* Iterate over region IDs */
+            STAILQ_FOREACH(region, &guami->served_region_ids, next) {
+               msg->setup_info.amf_region_info[r].amf_region_id = region->amf_region_id;
+            }
+          r++;
+       }
+   }
+   msg->setup_info.num_amf_regions = r;
+   register_gnb_xn_pending++;
+   
+   createXninst(gnb_inst, &msg->setup_info, &msg->net_config);
+   LOG_I(GNB_APP ,"Sending XNAP_register gNB request from gNB app\n");
+   itti_send_msg_to_task (TASK_XNAP, GNB_MODULE_ID_TO_INSTANCE(gnb_inst), msg_p);
+  }
+  return register_gnb_xn_pending; 
+}
+
+/*================================================================================*/
+
 /*------------------------------------------------------------------------------*/
 
 void *gNB_app_task(void *args_p)
@@ -140,6 +219,16 @@ void *gNB_app_task(void *args_p)
       // this sends the E1AP_REGISTER_REQ to CU-CP so it sets up the socket
       // it does NOT use the E1AP part
       itti_send_msg_to_task(TASK_CUCP_E1, 0, msg);
+    }
+    
+    if (node_type == ngran_gNB_CUCP || node_type == ngran_gNB_CU || node_type == ngran_gNB) {
+      if (is_xnap_enabled()) {
+        if (itti_create_task(TASK_XNAP, xnap_task, NULL) < 0) {
+          LOG_E(XNAP, "Create task for XNAP failed\n");
+        }
+      } else {
+        LOG_I(XNAP, "XNAP is disabled.\n");
+      }
     }
 
     if (node_type == ngran_gNB_CUUP) {
@@ -179,6 +268,9 @@ void *gNB_app_task(void *args_p)
     case NGAP_REGISTER_GNB_CNF:
       LOG_I(GNB_APP, "[gNB %ld] Received %s: associated AMF %d\n", instance, msg_name,
             NGAP_REGISTER_GNB_CNF(msg_p).nb_amf);
+      if (is_xnap_enabled()) {
+         gNB_app_register_xn(instance);
+      }
       break;
 
     case F1AP_SETUP_RESP:

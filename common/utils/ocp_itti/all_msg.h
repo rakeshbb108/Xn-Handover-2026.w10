@@ -6,6 +6,7 @@
 #include "openair2/COMMON/nas_messages_def.h"
 #include "openair2/COMMON/s1ap_messages_def.h"
 #include "openair2/COMMON/x2ap_messages_def.h"
+#include "openair2/COMMON/xnap_messages_def.h"
 #include "openair2/COMMON/m2ap_messages_def.h"
 #include "openair2/COMMON/m3ap_messages_def.h"
 #include "openair2/COMMON/sctp_messages_def.h"

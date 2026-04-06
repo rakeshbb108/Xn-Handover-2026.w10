@@ -56,6 +56,7 @@
 #include "ngap_messages_types.h"
 #include "oai_asn1.h"
 #include "queue.h"
+#include "ngap_gNB_mobility_management.h"
 
 char *ngap_direction2String(int ngap_dir) {
   static char *ngap_direction_String[] = {
@@ -101,7 +102,8 @@ void ngap_handle_ng_setup_message(ngap_gNB_amf_data_t *amf_desc_p, int sctp_shut
     /* If there are no more pending messages, inform gNB app */
     if (amf_desc_p->ngap_gNB_instance->ngap_amf_pending_nb == 0) {
       MessageDef *message_p = itti_alloc_new_message(TASK_NGAP, 0, NGAP_REGISTER_GNB_CNF);
-      NGAP_REGISTER_GNB_CNF(message_p).nb_amf = amf_desc_p->ngap_gNB_instance->ngap_amf_associated_nb;
+      ngap_register_gnb_cnf_t *msg = &NGAP_REGISTER_GNB_CNF(message_p);
+      msg->nb_amf = amf_desc_p->ngap_gNB_instance->ngap_amf_associated_nb;
       itti_send_msg_to_task(TASK_GNB_APP, amf_desc_p->ngap_gNB_instance->instance, message_p);
     }
   }
@@ -788,6 +790,10 @@ static int ngap_gNB_handle_initial_context_request(sctp_assoc_t assoc_id, uint32
   memset(msg, 0, sizeof(*msg));
   msg->gNB_ue_ngap_id = ue_desc_p->gNB_ue_ngap_id;
   msg->amf_ue_ngap_id = ue_desc_p->amf_ue_ngap_id;
+
+  //CP-TNL-address used during Xn-HO message
+  msg->amf_ng_ip = ue_desc_p->amf_ref->amf_s1_ip;
+
   /* id-UEAggregateMaximumBitRate */
   NGAP_FIND_PROTOCOLIE_BY_ID(NGAP_InitialContextSetupRequestIEs_t, ie, container, NGAP_ProtocolIE_ID_id_UEAggregateMaximumBitRate, false);
   if (ie != NULL) {
@@ -1383,7 +1389,46 @@ static int ngap_gNB_handle_pdusession_release_command(sctp_assoc_t assoc_id, uin
 
 static int ngap_gNB_handle_ng_path_switch_request_ack(sctp_assoc_t assoc_id, uint32_t stream, NGAP_NGAP_PDU_t *pdu)
 {
-  // TODO
+  NGAP_INFO("Received NG Path Switch Request Acknowledge\n");
+  ngap_gNB_amf_data_t *amf_desc_p = NULL;
+  DevAssert(pdu != NULL);
+
+  if ((amf_desc_p = ngap_gNB_get_AMF(NULL, assoc_id, 0)) == NULL) {
+    NGAP_ERROR(
+        "[SCTP %u] Received Path Switch Request Acknowledge for non "
+        "existing AMF context\n",
+        assoc_id);
+    return -1;
+  }
+  MessageDef *message_p = itti_alloc_new_message(TASK_NGAP, 0, NGAP_PATH_SWITCH_REQ_ACK);
+  ngap_path_switch_req_ack_t *msg = &NGAP_PATH_SWITCH_REQ_ACK(message_p);
+  memset(msg, 0, sizeof(*msg));
+  if (decode_ng_path_switch_request_acknowledge(msg, pdu) < 0) {
+    NGAP_ERROR("Failed to decode NG Path Switch Request Acknowledge\n");
+    itti_free(TASK_NGAP, message_p);
+    return -1;
+  }
+
+  ngap_gNB_ue_context_t *ue_desc_p = ngap_get_ue_context(msg->gNB_ue_ngap_id);
+  if (!ue_desc_p) {
+    NGAP_ERROR(
+        "[SCTP %u] Received Path Switch Request Acknowledge Msg for non existing UE context (gNB_ue_ngap_id %d) \n",
+        assoc_id,
+        msg->gNB_ue_ngap_id);
+    itti_free(TASK_NGAP, message_p);
+    return -1;
+  }
+
+  ue_desc_p->rx_stream = stream;
+  if (ue_desc_p->amf_ue_ngap_id != msg->amf_ue_ngap_id) {
+    NGAP_ERROR("UE context amf_ue_ngap_id is different form that of the message (%ld != %ld)",
+               ue_desc_p->amf_ue_ngap_id,
+               msg->amf_ue_ngap_id);
+    itti_free(TASK_NGAP, message_p);
+    return -1;
+  }
+
+  itti_send_msg_to_task(TASK_RRC_GNB, amf_desc_p->ngap_gNB_instance->instance, message_p);
   return 0;
 }
 

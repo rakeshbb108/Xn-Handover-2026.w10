@@ -67,11 +67,11 @@ typedef enum {
 } x2ap_eNB_state_t;
 
 /* Served PLMN identity element */
-struct plmn_identity_s {
+struct x2ap_plmn_identity_s {
   uint16_t mcc;
   uint16_t mnc;
   uint8_t  mnc_digit_length;
-  STAILQ_ENTRY(plmn_identity_s) next;
+  STAILQ_ENTRY(x2ap_plmn_identity_s) next;
 };
 
 /* Served group id element */

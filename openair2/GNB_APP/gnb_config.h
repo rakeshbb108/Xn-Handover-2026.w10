@@ -52,6 +52,9 @@ int gNB_app_handle_f1ap_gnb_cu_configuration_update(f1ap_gnb_cu_configuration_up
 MessageDef *RCconfig_NR_CU_E1(const E1_t *entity);
 ngran_node_t get_node_type(void);
 void nfapi_stop_l1();
+
+xnap_net_config_t Read_IPconfig_Xn(void); // XNAP
+
 #ifdef E2_AGENT
 #include "openair2/E2AP/e2_agent_arg.h"
 e2_agent_args_t RCconfig_NR_E2agent(void);

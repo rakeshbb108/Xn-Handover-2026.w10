@@ -23,5 +23,6 @@
 #define F1AP_CU_TASK_H_
 
 void *F1AP_CU_task(void *arg);
-
+//XN
+void cu_register_xn(uint32_t gnb_id_num, f1ap_served_cell_info_t *cell, xnap_net_config_t nc);
 #endif /* F1AP_CU_TASK_H_ */

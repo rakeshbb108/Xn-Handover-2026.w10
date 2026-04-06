@@ -52,6 +52,8 @@
 #include "uper_decoder.h"
 #include "utils.h"
 #include "xer_encoder.h"
+#include "openair2/XNAP/xnap_gNB_defs.h"
+#include "openair2/XNAP/xnap_gNB_management_procedures.h"
 
 static int get_dl_band(const f1ap_served_cell_info_t *cell_info)
 {

@@ -517,6 +517,25 @@ add_library(x2ap
 target_link_libraries(x2ap PUBLIC asn1_x2ap)
 target_link_libraries(x2ap PRIVATE asn1_lte_rrc_hdrs asn1_nr_rrc_hdrs)
 
+#XNAP
+##############
+set(XNAP_DIR ${OPENAIR2_DIR}/XNAP)
+include_directories ("${XNAP_DIR}")
+add_library(xnap
+  ${XNAP_DIR}/xnap_common.c
+  ${XNAP_DIR}/xnap_gNB_task.c
+  ${XNAP_DIR}/xnap_gNB_management_procedures.c
+  ${XNAP_DIR}/xnap_gNB_generate_messages.c
+  ${XNAP_DIR}/xnap_gNB_interface_management.c
+  ${XNAP_DIR}/xnap_gNB_handler.c
+  ${XNAP_DIR}/xnap_gNB_itti_messaging.c
+  ${XNAP_DIR}/xnap_ids.c
+  ${XNAP_DIR}/xnap_timers.c
+ )
+target_link_libraries(xnap PUBLIC asn1_xnap)
+target_link_libraries(xnap PRIVATE ngap nr_rrc ds)
+target_link_libraries(xnap PRIVATE asn1_lte_rrc_hdrs asn1_nr_rrc_hdrs)
+
 # F1AP
 ##############
 set(F1AP_DIR ${OPENAIR2_DIR}/F1AP)
@@ -1194,6 +1213,7 @@ set(L2_NR_SRC
   ${NR_RRC_DIR}/rrc_gNB_cuup.c
   ${NR_RRC_DIR}/rrc_gNB_du.c
   ${NR_RRC_DIR}/rrc_gNB_mobility.c
+  ${NR_RRC_DIR}/rrc_gNB_XNAP.c
   )
 
 set(L2_SRC_UE
@@ -1360,7 +1380,7 @@ add_library(e1_if
 
 target_link_libraries(e1_if PRIVATE asn1_nr_rrc_hdrs asn1_lte_rrc_hdrs asn1_f1ap SECURITY ${OPENSSL_LIBRARIES} e1ap GTPV1U)
 
-target_link_libraries(L2_NR PRIVATE f1ap x2ap s1ap ngap nr_rrc e1ap nr_rlc nr_common)
+target_link_libraries(L2_NR PRIVATE f1ap x2ap s1ap ngap nr_rrc e1ap nr_rlc nr_common xnap)
 if(OAI_AERIAL)
     target_compile_definitions(L2_NR PRIVATE ENABLE_AERIAL)
 endif()
@@ -1856,7 +1876,7 @@ target_link_libraries(nr-softmodem PRIVATE
   UTIL SCTP_CLIENT SCHED_LIB SCHED_RU_LIB SCHED_NR_LIB PHY_NR PHY PHY_COMMON PHY_NR_COMMON PHY_RU GTPV1U SECURITY
   ITTI ${NAS_UE_LIB} lte_rrc nr_rrc
   ngap s1ap L2_LTE_NR L2_NR MAC_NR_COMMON NFAPI_LIB NFAPI_VNF_LIB NFAPI_PNF_LIB NFAPI_USER_LIB SIMU
-  x2ap f1ap m2ap m3ap e1ap radio_common
+  x2ap xnap f1ap m2ap m3ap e1ap radio_common
   time_management softmodem_common
   -Wl,--end-group z dl)
 
@@ -1883,7 +1903,7 @@ endif()
 
 # force the generation of ASN.1 so that we don't need to wait during the build
 target_link_libraries(nr-softmodem PRIVATE
-  asn1_lte_rrc asn1_nr_rrc asn1_s1ap asn1_ngap asn1_m2ap asn1_m3ap asn1_x2ap asn1_f1ap asn1_lpp)
+  asn1_lte_rrc asn1_nr_rrc asn1_s1ap asn1_ngap asn1_m2ap asn1_m3ap asn1_x2ap asn1_xnap asn1_f1ap asn1_lpp)
 
 add_executable(nr-cuup
   executables/nr-cuup.c
@@ -1935,7 +1955,7 @@ target_link_libraries(nr-uesoftmodem PRIVATE asn1_nr_rrc_hdrs asn1_lte_rrc_hdrs)
 
 # force the generation of ASN.1 so that we don't need to wait during the build
 target_link_libraries(nr-uesoftmodem PRIVATE
-                      asn1_lte_rrc asn1_nr_rrc asn1_s1ap asn1_ngap asn1_m2ap asn1_m3ap asn1_x2ap asn1_f1ap asn1_lpp)
+                      asn1_lte_rrc asn1_nr_rrc asn1_s1ap asn1_ngap asn1_m2ap asn1_m3ap asn1_x2ap asn1_xnap asn1_f1ap asn1_lpp)
 
 ###################################"
 # Addexecutables for tests
@@ -2139,7 +2159,7 @@ if (${T_TRACER})
         syncsim nr_ulsim nr_dlsim nr_dlschsim nr_pbchsim nr_pucchsim
         nr_ulschsim ldpctest polartest smallblocktest nr_srssim
         #all "add_library" definitions
-        ITTI lte_rrc nr_rrc s1ap x2ap m2ap m3ap f1ap
+        ITTI lte_rrc nr_rrc s1ap x2ap xnap m2ap m3ap f1ap
         params_libconfig
         oai_eth_transpro UTIL
         SECURITY SCHED_LIB SCHED_NR_LIB SCHED_RU_LIB SCHED_UE_LIB SCHED_NR_UE_LIB

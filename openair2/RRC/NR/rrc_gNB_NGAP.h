@@ -112,4 +112,8 @@ int rrc_gNB_send_NGAP_ul_ran_status_transfer(gNB_RRC_INST *rrc,
 
 int rrc_gNB_process_NGAP_DL_RAN_STATUS_TRANSFER(MessageDef *msg_p, instance_t instance);
 
+void rrc_gNB_send_NGAP_PATH_SWITCH_REQUEST(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE);
+int rrc_gNB_process_NGAP_PATH_SWITCH_REQUEST_ACKNOWLEDGEMENT(gNB_RRC_INST *rrc, instance_t instance, ngap_path_switch_req_ack_t *msg);
+void set_UE_security_algos(const gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, const ngap_security_capabilities_t *cap);
+const plmn_id_t *get_serving_plmn(gNB_RRC_INST *rrc, const plmn_id_t *plmn);
 #endif

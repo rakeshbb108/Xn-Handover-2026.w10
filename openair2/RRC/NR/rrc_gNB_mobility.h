@@ -31,6 +31,8 @@ typedef struct gNB_RRC_UE_s gNB_RRC_UE_t;
 
 typedef struct NR_CellGroupConfig NR_CellGroupConfig_t;
 
+RB_PROTOTYPE(rrc_neigh_cell_tree, nr_rrc_neighcells_container_t, entries, neigh_compare);
+
 typedef void (*ho_cancel_t)(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue);
 typedef int (*ho_status_transfer_t)(gNB_RRC_INST *rrc,
                                     gNB_RRC_UE_t *UE,
@@ -41,6 +43,10 @@ typedef int (*ho_status_transfer_t)(gNB_RRC_INST *rrc,
 typedef struct nr_ho_source_cu {
   /// pointer to the (source) cell container
   const nr_rrc_cell_container_t *cell;
+  ///target gNB XN assoc id
+  sctp_assoc_t  tar_assoc_id;
+  ///target gNB UE XNAP id
+  uint32_t tar_ue_xnap_id;
   /// (source) DU UE ID; in F1, the DU UE ID will change to the new (target) DU
   /// UE ID during handover, and the CU needs to keep track of this in case of
   /// reestablishment
@@ -59,15 +65,28 @@ typedef struct nr_ho_source_cu {
   gtpu_tunnel_t old_du_tunnel_config;
 } nr_ho_source_cu_t;
 
+typedef struct cause_s{
+    uint8_t type;
+    uint8_t value;
+}cause_t;
+
+typedef struct handover_failure_s{
+  uint64_t ue_id; //amf_ue_ngap_id, src_xnap_ue_id
+  cause_t cause;
+}handover_failure_t;
+
 /* acknowledgement of handover request. buf+len is the RRC Reconfiguration */
 typedef void (*ho_req_ack_t)(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue);
 typedef void (*ho_success_t)(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue);
-typedef void (*ho_failure_t)(gNB_RRC_INST *rrc, uint32_t gnb_ue_id, ngap_handover_failure_t *msg);
+typedef void (*ho_failure_t)(gNB_RRC_INST *rrc, uint32_t gnb_ue_id, handover_failure_t *msg);
 typedef void (*ho_trigger_t)(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue);
-
 typedef struct nr_ho_target_cu {
   /// pointer to the (target) cell container
   const nr_rrc_cell_container_t *cell;
+  //source_gNB_XN_assoc_id
+  sctp_assoc_t src_assoc_id;
+  //source UE XNAP id
+  uint32_t src_ue_xnap_id;
   /// (target) DU UE ID; the (source) DU UE ID will change to the new (target)
   /// DU UE ID after sending a reconfiguration, which is later than when
   /// receiving this ID
@@ -99,7 +118,7 @@ void nr_rrc_trigger_f1_ho(gNB_RRC_INST *rrc,
                           const nr_rrc_cell_container_t *source_cell,
                           const nr_rrc_cell_container_t *target_cell);
 void nr_rrc_finalize_ho(gNB_RRC_UE_t *ue);
-void nr_rrc_n2_ho_failure(gNB_RRC_INST *rrc, uint32_t gnb_ue_id, ngap_handover_failure_t *msg);
+void nr_rrc_n2_ho_failure(gNB_RRC_INST *rrc, uint32_t gnb_ue_id, handover_failure_t *msg);
 
 void nr_rrc_trigger_n2_ho(gNB_RRC_INST *rrc,
                           gNB_RRC_UE_t *ue,
@@ -115,5 +134,13 @@ byte_array_t *get_meas_timing_config(const NR_MeasurementTimingConfiguration_t *
 void nr_rrc_apply_target_context(gNB_RRC_UE_t *UE);
 
 bool nr_rrc_update_cell_assoc_after_ho(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE);
+
+void nr_rrc_trigger_xn_ho_target(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue);
+void nr_rrc_trigger_xn_ho(gNB_RRC_INST *rrc,
+                      gNB_RRC_UE_t *ue,
+                      int serving_pci,
+                      const nr_neighbour_cell_t *neighbour_config);
+void nr_HO_Xn_trigger_telnet(gNB_RRC_INST *rrc, uint32_t neighbour_pci, uint32_t rrc_ue_id);
+void rrc_gNB_send_XNAP_HANDOVER_REQUEST_ACKNOWLEDGE(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, byte_array_t ho_command);
 
 #endif /* RRC_GNB_MOBILITY_H_ */

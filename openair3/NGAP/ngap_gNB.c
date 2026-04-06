@@ -65,6 +65,8 @@
 #include "s1ap_messages_types.h"
 #include "sctp_messages_types.h"
 #include "tree.h"
+#include "ngap_gNB_ue_context.h"
+#include "ngap_gNB_mobility_management.h"
 
 #if defined(TEST_S1C_AMF)
   #include "oaisim_amf_test_s1c.h"
@@ -341,7 +343,6 @@ int ngap_handover_required(instance_t instance, ngap_handover_required_t *msg)
     ASN_STRUCT_FREE(asn_DEF_NGAP_NGAP_PDU, pdu);
     return -1;
   }
-
   /* UE associated signalling -> use the allocated stream */
   ngap_gNB_itti_send_sctp_data_req(ngap_gNB_instance_p->instance,
                                    ue_context_p->amf_ref->assoc_id,
@@ -350,6 +351,53 @@ int ngap_handover_required(instance_t instance, ngap_handover_required_t *msg)
                                    ue_context_p->tx_stream);
 
   ASN_STRUCT_FREE(asn_DEF_NGAP_NGAP_PDU, pdu);
+  return 0;
+}
+
+static int ngap_gNB_path_switch_request(instance_t instance, ngap_path_switch_req_t *msg){
+
+  byte_array_t ba = { .buf = NULL, .len = 0 };
+
+  /* Retrieve the NGAP gNB instance associated with Mod_id */
+  ngap_gNB_instance_t *ngap = ngap_gNB_get_instance(instance);
+  DevAssert(msg != NULL);
+  DevAssert(ngap != NULL);
+
+  // First, create and store NGAP UE context
+  ngap_gNB_ue_context_t ue_context_p = {
+      .amf_ref = ngap_gNB_get_AMF_from_instance(ngap),
+      .gNB_ue_ngap_id = msg->gNB_ue_ngap_id,
+      .amf_ue_ngap_id = msg->amf_ue_ngap_id,
+      .gNB_instance = ngap,
+      .ue_state = NGAP_UE_CONNECTED,
+  };
+  ngap_store_ue_context(&ue_context_p);
+
+  if (!ue_context_p.amf_ref) {
+    NGAP_ERROR("Failed to fetch AMF for current NGAP instance\n");
+    return -1;
+  }
+
+  NGAP_NGAP_PDU_t *pdu = encode_ng_path_switch_request(msg);
+  if (!pdu) {
+    NGAP_ERROR("Failed to encode NGAP Path Switch Request\n");
+    return -1;
+  }   
+    
+  xer_fprint(stdout, &asn_DEF_NGAP_NGAP_PDU, pdu);
+  if (LOG_DEBUGFLAG(DEBUG_ASN1))
+    xer_fprint(stdout, &asn_DEF_NGAP_NGAP_PDU, pdu);
+
+  if (ngap_gNB_encode_pdu(pdu, &ba.buf, (uint32_t *)&ba.len) < 0) {
+    NGAP_ERROR("Failed to encode Path Switch Request message\n");
+    ASN_STRUCT_FREE(asn_DEF_NGAP_NGAP_PDU, pdu);
+    return -1;
+  }
+
+  /* UE associated signalling -> use the allocated stream */
+  ngap_gNB_itti_send_sctp_data_req(ngap->instance, ue_context_p.amf_ref->assoc_id, ba.buf, ba.len, ue_context_p.tx_stream);
+  NGAP_INFO("Sent Path Switch Request to AMF\n");
+
   return 0;
 }
 
@@ -624,6 +672,10 @@ void *ngap_gNB_process_itti_msg(void *notUsed) {
       case NGAP_PDUSESSION_MODIFY_RESP:
         ngap_gNB_pdusession_modify_resp(instance, &NGAP_PDUSESSION_MODIFY_RESP(received_msg));
         break;
+
+      case NGAP_PATH_SWITCH_REQ:
+         ngap_gNB_path_switch_request(instance, &NGAP_PATH_SWITCH_REQ(received_msg));
+         break;
 
       case NGAP_NAS_NON_DELIVERY_IND:
         ngap_gNB_nas_non_delivery_ind(instance, &NGAP_NAS_NON_DELIVERY_IND(received_msg));

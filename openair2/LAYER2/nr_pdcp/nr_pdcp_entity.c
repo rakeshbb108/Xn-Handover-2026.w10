@@ -202,7 +202,7 @@ static void nr_pdcp_entity_recv_pdu(nr_pdcp_entity_t *entity,
           entity->rx_deliv,
           rcvd_sn);
   }
-
+  
   if (entity->t_reordering_start != 0 && entity->rx_deliv >= entity->rx_reord) {
     /* stop and reset t-Reordering */
     entity->t_reordering_start = 0;
@@ -762,7 +762,7 @@ nr_pdcp_entity_t *new_nr_pdcp_entity(
   ret->is_gnb = is_gnb;
 
   nr_pdcp_entity_set_security(ret, security_parameters);
-
+ 
   /* PDCP Count API */
   ret->get_pdcp_count_dl = nr_pdcp_entity_get_count_dl;
   ret->get_pdcp_count_ul = nr_pdcp_entity_get_count_ul;

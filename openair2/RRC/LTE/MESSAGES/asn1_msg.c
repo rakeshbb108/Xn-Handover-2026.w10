@@ -1237,9 +1237,6 @@ uint8_t do_SIB1(rrc_eNB_carrier_data_t *carrier,
 }
 
 
-
-
-
 uint8_t do_SIB23(uint8_t Mod_id,
 
                  int CC_id, BOOLEAN_t brOption, 

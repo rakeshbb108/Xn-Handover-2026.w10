@@ -92,6 +92,13 @@
 #define NGAP_TRANSPORT_LAYER_ADDRESS_SIZE (160 / 8)
 
 #define NGAP_MAX_NB_AMF_IP_ADDRESS 10
+#define NGAP_IMSI_LENGTH           16
+
+#define QOSFLOW_MAX_VALUE           64
+#define TAI_LIST_MAX               256
+#define MAX_SUPPORTED_PLMNS        12
+#define MAX_SUPPORTED_SLICES       1024
+#define AMF_REGION_IDS_MAX         16
 
 /* Security key length used within gNB
  * Even if only 16 bytes will be effectively used,
@@ -411,6 +418,7 @@ typedef struct ngap_register_gnb_req_s {
 } ngap_register_gnb_req_t;
 
 //-------------------------------------------------------------------------------------------//
+
 // NGAP -> gNB application layer messages
 typedef struct ngap_register_gnb_cnf_s {
   /* Nb of AMF connected */
@@ -739,6 +747,7 @@ typedef struct ngap_ue_ctxt_modification_req_s {
 
   /* UE aggregate maximum bitrate */
   ngap_ambr_t ue_ambr;
+  bool has_ue_ambr;
 
   /* NR Security capabilities */
   ngap_security_capabilities_t security_capabilities;
@@ -772,6 +781,9 @@ typedef struct ngap_initial_context_setup_req_s {
   uint32_t gNB_ue_ngap_id;
 
   uint64_t amf_ue_ngap_id;
+
+  //CP-TNL address
+  net_ip_address_t amf_ng_ip;
 
   /* UE aggregate maximum bitrate */
   bool has_ue_ambr;
@@ -1051,5 +1063,60 @@ typedef struct {
   // NRPPa pdu (Mandatory)
   byte_array_t nrppa_pdu;
 } ngap_downlink_non_ue_associated_nrppa_t;
+typedef struct ngap_path_switch_req_s {
+  /* gNB UE ngap id*/
+  uint32_t  gNB_ue_ngap_id;
+  /* AMF UE id  */
+  uint64_t  amf_ue_ngap_id;
+  /* User location info */
+  user_location_information_t user_info; 
+  /* Security algorithms */
+  ngap_security_capabilities_t security_capabilities;
+  /* Number of pdusession setup-ed in the list */
+  uint8_t   nb_of_pdusessions;
+  /* list of pdusession setup-ed by RRC layers */
+  pdusession_setup_t pdusessions_tobeswitched[NGAP_MAX_PDU_SESSION];
+} ngap_path_switch_req_t;
+
+typedef enum ngap_sec_ind_s {
+  NGAP_SEC_REQUIRED = 0,
+  NGAP_SEC_PREFERRED = 1,
+  NGAP_SEC_NOT_NEEDED = 2,
+} ngap_sec_ind_t;
+
+typedef struct sec_indication_s{
+  ngap_sec_ind_t integrity_protection_ind;
+  ngap_sec_ind_t confidentiality_protextion_ind;
+} sec_indication_t;
+
+typedef struct psr_ack_transfer_s{
+  // PDU session id
+  int pdusession_id;
+  // UPF endpoint of the NG-U (N3) transport bearer (O) //
+  bool has_n3_info;
+  gtpu_tunnel_t n3_incoming;
+  // Security indication (O) //
+  bool has_sec_ind;
+  sec_indication_t sec_indication;
+} psr_ack_transfer_t;
+
+typedef struct ngap_path_switch_req_ack_s{
+    /* Amf UE id*/
+    uint64_t amf_ue_ngap_id;
+    /* gNB UE ngap id*/
+    uint32_t  gNB_ue_ngap_id;
+    /* Security Capabilities (O)*/
+    ngap_security_capabilities_t security_capabilities;
+    /* Security Key */
+    int nh_ncc;
+    uint8_t next_security_key[SECURITY_KEY_LENGTH];
+    /* PDU session switched list */
+    uint8_t nb_of_pdusessions;
+    /* PDU session switched items */
+    psr_ack_transfer_t pdusessions_switched[NGAP_MAX_PDU_SESSION];
+    /* allowed nssai */
+    uint8_t nb_allowed_nssais;
+    nssai_t allowed_nssai[8];
+} ngap_path_switch_req_ack_t;
 
 #endif /* NGAP_MESSAGES_TYPES_H_ */

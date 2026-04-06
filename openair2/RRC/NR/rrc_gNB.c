@@ -85,6 +85,7 @@
 #include "rrc_gNB_du.h"
 #include "rrc_cell_management.h"
 #include "rrc_gNB_mobility.h"
+#include "rrc_gNB_XNAP.h"
 #include "rrc_gNB_radio_bearers.h"
 #include "rrc_cell_management.h"
 #include "rrc_messages_types.h"
@@ -373,6 +374,7 @@ void openair_rrc_gNB_configuration(gNB_RRC_INST *rrc, nr_rrc_config_t *configura
   RB_INIT(&rrc->cuups);
   RB_INIT(&rrc->dus);
   RB_INIT(&rrc->cells);
+  RB_INIT(&rrc->neighs);
   rrc->configuration = *configuration;
 }
 
@@ -853,7 +855,7 @@ NR_MeasConfig_t *nr_rrc_get_measconfig(const gNB_RRC_INST *rrc, uint64_t nr_cell
 nr_rrc_reconfig_param_t get_RRCReconfiguration_params(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, uint8_t srb_reest_bitmap, bool drb_reestablish)
 {
   uint8_t xid = rrc_gNB_get_next_transaction_identifier(rrc->module_id);
-
+ 
   // Re-establish PDCP for SRB2 only
   bool do_integrity = rrc->security.do_drb_integrity;
   bool do_ciphering = rrc->security.do_drb_ciphering;
@@ -1697,6 +1699,7 @@ fallback_rrc_setup:
   return;
 }
 
+
 static void process_Periodical_Measurement_Report(gNB_RRC_UE_t *ue_ctxt, NR_MeasurementReport_t *measurementReport)
 {
   ASN_STRUCT_FREE(asn_DEF_NR_MeasResults, ue_ctxt->measResults);
@@ -1756,6 +1759,7 @@ static void process_Event_Based_Measurement_Report(gNB_RRC_INST *rrc,
       for (int neigh_meas_idx = 0; neigh_meas_idx < measResultListNR->list.count; neigh_meas_idx++) {
         const NR_MeasResultNR_t *meas_result_neigh_cell = (measResultListNR->list.array[neigh_meas_idx]);
         const int neighbour_pci = *(meas_result_neigh_cell->physCellId);
+        gNB_RRC_INST *rrc = RC.nrrrc[0];
 
         // TS 138 133 Table 10.1.6.1-1: SS-RSRP and CSI-RSRP measurement report mapping
         const struct NR_MeasResultNR__measResult__cellResults *cellResults = &(meas_result_neigh_cell->measResult.cellResults);
@@ -1812,10 +1816,17 @@ static void process_Event_Based_Measurement_Report(gNB_RRC_INST *rrc,
             if (neighbourCellRSRP > best_rsrp) {
               // UE can send multiple neighbour cells A3 event report in 1 Meas Report. So, we need to find the best neighbour
               best_rsrp = neighbourCellRSRP;
-              LOG_I(NR_RRC, "HO LOG: Serving Cell RSRP: %d - Best Neighbor RSRP: %d ! Trigger N2 HO\n", servingCellRSRP, best_rsrp);
-              nr_rrc_trigger_n2_ho(rrc, ue, scell_pci, neighbour);
+              bool xn_setup_established = check_xn_setup(rrc, neighbour->gNB_ID);
+              if(xn_setup_established){
+                // Trigger Xn Handover
+                LOG_I(NR_RRC,"HO_LOG: Found Xn Neighbour!");
+                LOG_I(NR_RRC, "HO LOG: Serving Cell RSRP: %d - Best Neighbor RSRP: %d ! Trigger Xn HO\n", servingCellRSRP, best_rsrp);
+                nr_rrc_trigger_xn_ho(rrc, ue, scell_pci, neighbour);
+              } else {
+                LOG_I(NR_RRC, "HO LOG: Serving Cell RSRP: %d - Best Neighbor RSRP: %d ! Trigger N2 HO\n", servingCellRSRP, best_rsrp);
+                nr_rrc_trigger_n2_ho(rrc, ue, scell_pci, neighbour);
+              }
             }
-            LOG_D(NR_RRC, "HO LOG: Trigger N2 HO for the neighbour gnb: %u cell: %lu\n", neighbour->gNB_ID, neighbour->nrcell_id);
           }
         } else if (target_cell && neighbour) {
           /* we know the cell and are connected to the DU! */
@@ -2176,9 +2187,7 @@ static void handle_rrcReconfigurationComplete(gNB_RRC_INST *rrc, gNB_RRC_UE_t *U
   if (UE->ho_context != NULL) {
     LOG_A(NR_RRC, "handover for UE %d/RNTI %04x complete!\n", UE->rrc_ue_id, UE->rnti);
     DevAssert(UE->ho_context->target != NULL);
-
     UE->ho_context->target->ho_success(rrc, UE);
-    nr_rrc_finalize_ho(UE);
   }
 
   f1_ue_data_t ue_data = cu_get_f1_ue_data(UE->rrc_ue_id);
@@ -2776,6 +2785,12 @@ static void rrc_CU_process_ue_context_release_complete(MessageDef *msg_p)
      * operation (i.e, handover) */
     rrc_gNB_send_NGAP_UE_CONTEXT_RELEASE_COMPLETE(0, UE->rrc_ue_id, &UE->pduSessions);
     rrc_remove_ue(RC.nrrrc[0], ue_context_p);
+    return;
+  }
+  
+  if(UE && UE->rrc_release){
+     rrc_remove_ue(RC.nrrrc[0], ue_context_p);
+     return;
   }
 }
 
@@ -3098,7 +3113,7 @@ void rrc_gNB_process_e1_bearer_context_setup_resp(e1ap_bearer_setup_resp_t *resp
     }
   }
 
-  // If HO Preparation Info is stored, N2 handover is ongoing
+  // If HO Preparation Info is stored, N2/Xn handover is ongoing
   if (UE->ho_context) {
     LOG_I(NR_RRC, "Received Bearer Context Setup Response for UE %d with valid HO Context\n", UE->rrc_ue_id);
     UE->ho_context->target->ho_trigger(rrc, UE);
@@ -3488,6 +3503,42 @@ void *rrc_gnb_task(void *args_p) {
 
       case X2AP_ENDC_DC_OVERALL_TIMEOUT:
         rrc_gNB_process_dc_overall_timeout(instance, &X2AP_ENDC_DC_OVERALL_TIMEOUT(msg_p));
+        break;
+
+      case XNAP_SETUP_REQ:
+        rrc_gNB_process_XNAP_SETUP_REQUEST(RC.nrrrc[0], ITTI_MSG_ORIGIN_INSTANCE(msg_p), &XNAP_SETUP_REQ(msg_p), instance);
+        break;
+      
+      case XNAP_SETUP_RESP:
+         rrc_gNB_process_XNAP_SETUP_RESPONSE(RC.nrrrc[0], ITTI_MSG_ORIGIN_INSTANCE(msg_p), &XNAP_SETUP_RESP(msg_p), instance);
+         break;
+ 
+      case XNAP_LOST_CONNECTION:
+         rrc_gNB_process_XNAP_LOST_CONNECTION(RC.nrrrc[0], &XNAP_LOST_CONNECTION(msg_p));
+         break;
+
+      case XNAP_HANDOVER_REQ://@target
+        rrc_gNB_process_XNAP_HANDOVER_PREPARATION(RC.nrrrc[0],ITTI_MSG_ORIGIN_INSTANCE(msg_p), &XNAP_HANDOVER_REQ(msg_p));
+         break;
+ 
+      case XNAP_HANDOVER_REQ_ACK:
+        rrc_gNB_process_XNAP_HANDOVER_REQUEST_ACKNOWLEDGE(RC.nrrrc[0], ITTI_MSG_ORIGIN_INSTANCE(msg_p), &XNAP_HANDOVER_REQ_ACK(msg_p));
+        break;
+
+      case XNAP_HANDOVER_PREPARATION_FAILURE: //@source
+        rrc_gNB_process_XNAP_HANDOVER_PREPARATION_FAILURE(ITTI_MSG_ORIGIN_INSTANCE(msg_p), &XNAP_HANDOVER_PREPARATION_FAILURE(msg_p));
+        break;
+      
+      case XNAP_SN_STATUS_TRANSFER:
+        rrc_gNB_process_XNAP_SN_STATUS_TRANSFER(RC.nrrrc[0], msg_p, instance);
+        break;
+      
+      case NGAP_PATH_SWITCH_REQ_ACK: //@target
+        rrc_gNB_process_NGAP_PATH_SWITCH_REQUEST_ACKNOWLEDGEMENT(RC.nrrrc[0], ITTI_MSG_ORIGIN_INSTANCE(msg_p), &NGAP_PATH_SWITCH_REQ_ACK(msg_p));
+        break;
+      
+      case XNAP_UE_CONTEXT_RELEASE: //@source
+        rrc_gNB_process_XNAP_UE_CONTEXT_RELEASE(RC.nrrrc[0], ITTI_MSG_ORIGIN_INSTANCE(msg_p), &XNAP_UE_CONTEXT_RELEASE(msg_p));
         break;
 
       case NGAP_UE_CONTEXT_RELEASE_COMMAND:

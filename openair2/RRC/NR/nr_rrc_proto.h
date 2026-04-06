@@ -44,6 +44,8 @@
 #define SRB1 1
 #define SRB2 2
 
+void activate_srb(gNB_RRC_UE_t *UE, int srb_id);
+
 void rrc_add_nsa_user(gNB_RRC_INST *rrc, x2ap_ENDC_sgnb_addition_req_t *m, sctp_assoc_t assoc_id);
 void rrc_add_nsa_user_resp(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, const f1ap_ue_context_setup_resp_t *resp);
 void rrc_release_nsa_user(gNB_RRC_INST *rrc, rrc_gNB_ue_context_t *ue_context);
@@ -96,7 +98,6 @@ bool trigger_bearer_setup(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, int n, pdusession
     __attribute__((warn_unused_result));
 
 int rrc_gNB_generate_pcch_msg(sctp_assoc_t assoc_id, const NR_SIB1_t *sib, uint32_t tmsi, uint8_t paging_drx);
-
 /** @}*/
 
 /* UE Management Procedures */
@@ -134,5 +135,8 @@ void rrc_f1_ue_context_setup_for_target_du(const gNB_RRC_INST *rrc,
                                            gNB_RRC_UE_t *ue,
                                            const nr_rrc_cell_container_t *cell,
                                            const byte_array_t *ho_prep_info);
+
+bool check_xn_setup(gNB_RRC_INST *rrc, uint32_t gNB_ID); // XnAP
+
 
 #endif

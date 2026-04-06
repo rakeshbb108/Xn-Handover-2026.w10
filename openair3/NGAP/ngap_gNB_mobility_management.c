@@ -749,3 +749,182 @@ NGAP_NGAP_PDU_t *encode_ng_ul_ran_status_transfer(const ngap_ran_status_transfer
 
   return pdu;
 }
+
+NGAP_NGAP_PDU_t *encode_ng_path_switch_request(ngap_path_switch_req_t *msg)
+{
+  printf("Inside encode ng path switch request \n");
+  NGAP_NGAP_PDU_t *pdu = malloc_or_fail(sizeof(*pdu));
+
+  pdu->present = NGAP_NGAP_PDU_PR_initiatingMessage;
+  asn1cCalloc(pdu->choice.initiatingMessage, head);
+  head->procedureCode = NGAP_ProcedureCode_id_PathSwitchRequest;
+  head->criticality = NGAP_Criticality_reject;
+  head->value.present = NGAP_InitiatingMessage__value_PR_PathSwitchRequest;
+  NGAP_PathSwitchRequest_t *out = &head->value.choice.PathSwitchRequest;
+
+  // RAN-UE-NGAP-ID (M) //
+  asn1cSequenceAdd(out->protocolIEs.list, NGAP_PathSwitchRequestIEs_t, ie1);
+  ie1->id = NGAP_ProtocolIE_ID_id_RAN_UE_NGAP_ID;
+  ie1->criticality = NGAP_Criticality_reject;
+  ie1->value.present = NGAP_PathSwitchRequestIEs__value_PR_RAN_UE_NGAP_ID;
+  ie1->value.choice.RAN_UE_NGAP_ID = msg->gNB_ue_ngap_id;
+  
+  // AMF UE NGAP ID (M) //
+  asn1cSequenceAdd(out->protocolIEs.list, NGAP_PathSwitchRequestIEs_t, ie2);
+  ie2->id = NGAP_ProtocolIE_ID_id_SourceAMF_UE_NGAP_ID;
+  ie2->criticality = NGAP_Criticality_reject;
+  ie2->value.present = NGAP_PathSwitchRequestIEs__value_PR_AMF_UE_NGAP_ID;
+  asn_uint642INTEGER(&ie2->value.choice.AMF_UE_NGAP_ID, msg->amf_ue_ngap_id);
+
+  // User Location Information (M) // 
+  {
+  asn1cSequenceAdd(out->protocolIEs.list, NGAP_PathSwitchRequestIEs_t, ie3);
+  ie3->id = NGAP_ProtocolIE_ID_id_UserLocationInformation;
+  ie3->criticality = NGAP_Criticality_ignore;
+  ie3->value.present = NGAP_PathSwitchRequestIEs__value_PR_UserLocationInformation;
+  ie3->value.choice.UserLocationInformation.present = NGAP_UserLocationInformation_PR_userLocationInformationNR;
+  asn1cCalloc(ie3->value.choice.UserLocationInformation.choice.userLocationInformationNR, userinfo_nr_p);
+
+  // NR User Location Information (M) //
+  const target_ran_node_id_t *target = &msg->user_info.target_ng_ran;
+  // CGI (M)
+  MACRO_GNB_ID_TO_CELL_IDENTITY(target->targetgNBId, msg->user_info.nrCellIdentity, &userinfo_nr_p->nR_CGI.nRCellIdentity);
+  MCC_MNC_TO_TBCD(target->plmn_identity.mcc,
+                  target->plmn_identity.mnc,
+                  target->plmn_identity.mnc_digit_length,
+                  &userinfo_nr_p->nR_CGI.pLMNIdentity);
+  // TAI (M)
+  INT24_TO_OCTET_STRING(target->tac, &userinfo_nr_p->tAI.tAC);
+  MCC_MNC_TO_PLMNID(target->plmn_identity.mcc,
+                    target->plmn_identity.mnc,
+                    target->plmn_identity.mnc_digit_length,
+                    &userinfo_nr_p->tAI.pLMNIdentity);
+  }
+
+  // UE Security Capabilities (M) //
+  asn1cSequenceAdd(out->protocolIEs.list, NGAP_PathSwitchRequestIEs_t, ie4);
+  ie4->id = NGAP_ProtocolIE_ID_id_UESecurityCapabilities;
+  ie4->criticality = NGAP_Criticality_ignore;
+  ie4->value.present = NGAP_PathSwitchRequestIEs__value_PR_UESecurityCapabilities;
+  encode_ngap_security_capabilities(&ie4->value.choice.UESecurityCapabilities, &msg->security_capabilities);
+
+  // PDU Session Resource Tobe Switched (M) //
+  {
+    asn1cSequenceAdd(out->protocolIEs.list, NGAP_PathSwitchRequestIEs_t, ie5);
+    ie5->id = NGAP_ProtocolIE_ID_id_PDUSessionResourceToBeSwitchedDLList;
+    ie5->criticality = NGAP_Criticality_reject;
+    ie5->value.present = NGAP_PathSwitchRequestIEs__value_PR_PDUSessionResourceToBeSwitchedDLList;
+
+    for (int pduSesIdx = 0; pduSesIdx < msg->nb_of_pdusessions; pduSesIdx++) {
+      asn1cSequenceAdd(ie5->value.choice.PDUSessionResourceToBeSwitchedDLList.list, NGAP_PDUSessionResourceToBeSwitchedDLItem_t, item);
+      item->pDUSessionID = msg->pdusessions_tobeswitched[pduSesIdx].pdusession_id;
+      /* dLQosFlowPerTNLInformation */
+      NGAP_PathSwitchRequestTransfer_t transfer = {0};
+      transfer.dL_NGU_UP_TNLInformation.present = NGAP_UPTransportLayerInformation_PR_gTPTunnel;
+      asn1cCalloc(transfer.dL_NGU_UP_TNLInformation.choice.gTPTunnel, tmp);
+      AssertFatal(tmp != NULL, "Failed to allocate gTPTunnel\n");
+      GTP_TEID_TO_ASN1(msg->pdusessions_tobeswitched[pduSesIdx].n3_outgoing.teid, &tmp->gTP_TEID);
+      tnl_to_bitstring(&tmp->transportLayerAddress, msg->pdusessions_tobeswitched[pduSesIdx].n3_outgoing.addr);
+
+      transport_layer_addr_t *addr = &msg->pdusessions_tobeswitched[pduSesIdx].n3_outgoing.addr;
+      printf("N3 Address: %u.%u.%u.%u (length=%d)\n",
+       addr->buffer[0], addr->buffer[1], addr->buffer[2], addr->buffer[3],
+       addr->length);
+
+      for (int j = 0; j < msg->pdusessions_tobeswitched[pduSesIdx].nb_of_qos_flow; j++) {
+        asn1cSequenceAdd(transfer.qosFlowAcceptedList.list, NGAP_QosFlowAcceptedItem_t, qosItem);
+        qosItem->qosFlowIdentifier = msg->pdusessions_tobeswitched[pduSesIdx].associated_qos_flows[j].qfi;
+      }
+      printf("Encoding PSR transfer: TEID = %x, QFIs = %d\n",
+       msg->pdusessions_tobeswitched[pduSesIdx].n3_outgoing.teid,
+       transfer.qosFlowAcceptedList.list.count);
+
+      void *buf;
+      ssize_t encoded = aper_encode_to_new_buffer(&asn_DEF_NGAP_PathSwitchRequestTransfer, NULL, &transfer, &buf);
+      AssertFatal(encoded > 0, "ASN1 message encoding failed !\n");
+      item->pathSwitchRequestTransfer.buf = buf;
+      item->pathSwitchRequestTransfer.size = encoded;
+
+      ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NGAP_PathSwitchRequestTransfer, &transfer);
+    }
+ }
+ return pdu;
+}
+
+int decode_ng_path_switch_request_acknowledge(ngap_path_switch_req_ack_t *msg, NGAP_NGAP_PDU_t *pdu)
+{
+  DevAssert(pdu != NULL);
+  NGAP_PathSwitchRequestAcknowledgeIEs_t *ie;
+  NGAP_PathSwitchRequestAcknowledge_t *container = &pdu->choice.successfulOutcome->value.choice.PathSwitchRequestAcknowledge;
+  
+  // AMF UE NGAP ID (M)
+  NGAP_FIND_PROTOCOLIE_BY_ID(NGAP_PathSwitchRequestAcknowledgeIEs_t, ie, container, NGAP_ProtocolIE_ID_id_AMF_UE_NGAP_ID, true);
+  asn_INTEGER2ulong(&(ie->value.choice.AMF_UE_NGAP_ID), &msg->amf_ue_ngap_id);
+  printf("AMF ue id: %lu\n", msg->amf_ue_ngap_id);
+
+  // RAN UE NGAP ID (M)
+  NGAP_FIND_PROTOCOLIE_BY_ID(NGAP_PathSwitchRequestAcknowledgeIEs_t, ie, container, NGAP_ProtocolIE_ID_id_RAN_UE_NGAP_ID, true);
+  msg->gNB_ue_ngap_id = ie->value.choice.RAN_UE_NGAP_ID;
+  printf("RAN ue id: %u\n", msg->gNB_ue_ngap_id);
+
+  // Security context (M)//
+  NGAP_FIND_PROTOCOLIE_BY_ID(NGAP_PathSwitchRequestAcknowledgeIEs_t, ie, container, NGAP_ProtocolIE_ID_id_SecurityContext, true);
+  msg->nh_ncc = ie->value.choice.SecurityContext.nextHopChainingCount;
+  memcpy(msg->next_security_key, ie->value.choice.SecurityContext.nextHopNH.buf, ie->value.choice.SecurityContext.nextHopNH.size);
+
+  // PDU Sessions Switched (M) //
+  NGAP_FIND_PROTOCOLIE_BY_ID(NGAP_PathSwitchRequestAcknowledgeIEs_t,
+                             ie,
+                             container,
+                             NGAP_ProtocolIE_ID_id_PDUSessionResourceSwitchedList,
+                             true);
+  msg->nb_of_pdusessions = ie->value.choice.PDUSessionResourceSwitchedList.list.count;
+  printf("Number of PDU sessions: %d\n", msg->nb_of_pdusessions);
+  for(int i = 0; i < msg->nb_of_pdusessions; ++i){
+     NGAP_PDUSessionResourceSwitchedItem_t *item = ie->value.choice.PDUSessionResourceSwitchedList.list.array[i];
+     msg->pdusessions_switched[i].pdusession_id = item->pDUSessionID;
+     // PSR Ack Trnasfer Octate String 
+     NGAP_PathSwitchRequestAcknowledgeTransfer_t *psrAckTransfer = NULL;     
+     asn_dec_rval_t dec_rval = uper_decode_complete(NULL, 
+                                                    &asn_DEF_NGAP_PathSwitchRequestAcknowledgeTransfer,
+                                                    (void **)&psrAckTransfer,
+                                                    item->pathSwitchRequestAcknowledgeTransfer.buf,
+                                                    item->pathSwitchRequestAcknowledgeTransfer.size);
+      if (dec_rval.code != RC_OK) {
+        NGAP_ERROR("Failed to decode Path Switch Request Acknowledge Trnasfer for pdu session id: %ld\n",         item->pDUSessionID);
+        continue;
+      }
+      
+      if(psrAckTransfer->uL_NGU_UP_TNLInformation){
+         NGAP_UPTransportLayerInformation_t *up_tnl = psrAckTransfer->uL_NGU_UP_TNLInformation;
+         if(up_tnl->present == NGAP_UPTransportLayerInformation_PR_gTPTunnel){
+            msg->pdusessions_switched[i].has_n3_info = true;
+            printf("updated n3 tunned info\n");
+            OCTET_STRING_TO_INT32(&(up_tnl->choice.gTPTunnel->gTP_TEID), msg->pdusessions_switched[i].n3_incoming.teid);
+            bitstring_to_tnl(&msg->pdusessions_switched[i].n3_incoming.addr, up_tnl->choice.gTPTunnel->transportLayerAddress);
+         } else {
+           NGAP_WARN("Missing UL Forwarding UP TNL Information\n");
+         }
+      }
+      
+      if(psrAckTransfer->securityIndication){
+        printf("securiy indicators are present\n");
+        msg->pdusessions_switched[i].has_sec_ind = true;
+        msg->pdusessions_switched[i].sec_indication.integrity_protection_ind = psrAckTransfer->securityIndication->integrityProtectionIndication;
+        msg->pdusessions_switched[i].sec_indication.confidentiality_protextion_ind = psrAckTransfer->securityIndication->confidentialityProtectionIndication;
+      } 
+      
+      ASN_STRUCT_FREE(asn_DEF_NGAP_PathSwitchRequestAcknowledgeTransfer, psrAckTransfer);
+  }
+
+  // Allowed NSSAI (M) //
+  NGAP_FIND_PROTOCOLIE_BY_ID(NGAP_PathSwitchRequestAcknowledgeIEs_t, ie, container, NGAP_ProtocolIE_ID_id_AllowedNSSAI, true);
+  NGAP_INFO("AllowedNSSAI.list.count %d\n", ie->value.choice.AllowedNSSAI.list.count);
+  msg->nb_allowed_nssais = ie->value.choice.AllowedNSSAI.list.count;
+
+  for (int i = 0;i< msg->nb_allowed_nssais; ++i){
+      msg->allowed_nssai[i] = decode_ngap_nssai(&ie->value.choice.AllowedNSSAI.list.array[i]->s_NSSAI);
+  }
+  
+  return 0;
+}

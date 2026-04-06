@@ -1032,6 +1032,7 @@ static void _nr_rx_sdu(const module_id_t gnb_mod_idP,
               slotP,
               UE->rnti,
               UE->UE_sched_ctrl.pusch_consecutive_dtx_cnt);
+          LOG_I(NR_MAC, "Calling trigger ul failure from _nr_rx_sdu \n");
         nr_mac_trigger_ul_failure(&UE->UE_sched_ctrl, UE->current_UL_BWP.scs);
       }
     }

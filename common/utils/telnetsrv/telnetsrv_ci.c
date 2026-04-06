@@ -146,6 +146,51 @@ int trigger_reestab(char *buf, int debug, telnet_printfunc_t prnt)
   return 0;
 }
 
+/** @brief Retrieve a UE context the RRC tree for a specific @param rrc_ue_id */
+rrc_gNB_ue_context_t *get_rrc_ue(int rrc_ue_id)
+{
+  rrc_gNB_ue_context_t *ue = NULL;
+  rrc_gNB_ue_context_t *l = NULL;
+  int n = 0;
+
+  if (!RC.nrrrc || !RC.nrrrc[0]) {
+    printf("RRC not initialized\n");
+    return NULL;
+  }
+
+  if (RB_EMPTY(&RC.nrrrc[0]->rrc_ue_head)) {
+    printf("RRC UE tree is empty\n");
+    return NULL;
+  }
+
+  // Iterate through the RRC UE tree
+  RB_FOREACH (l, rrc_nr_ue_tree_s, &RC.nrrrc[0]->rrc_ue_head) {
+    if (rrc_ue_id != -1) {
+      if (l != NULL && l->ue_context.rrc_ue_id == rrc_ue_id) {
+        ue = l;
+        break;
+      }
+    } else {
+      if (ue == NULL) {
+        ue = l;
+      }
+      n++;
+    }
+  }
+
+  if (rrc_ue_id == -1) {
+    if (!ue) {
+      printf("could not find any UE in RRC\n");
+    } else if (n > 1) {
+      printf("more than one UE in RRC present\n");
+      ue = NULL;
+    }
+  }
+
+  return ue;
+}
+
+
 extern nr_rrc_du_container_t *get_du_for_ue(gNB_RRC_INST *rrc, uint32_t ue_id);
 
 /** @brief Get connected DU by the UE ID */
@@ -174,6 +219,46 @@ int fetch_du_by_ue_id(char *buf, int debug, telnet_printfunc_t prnt)
     ERROR_MSG_RET("No DU connected\n");
     return -1;
   }
+}
+
+extern void nr_HO_Xn_trigger_telnet(gNB_RRC_INST *rrc, uint32_t nr_cellid, uint32_t rrc_ue_id);
+
+int rrc_gNB_trigger_xn_ho(char *buf, int debug, telnet_printfunc_t prnt)
+{
+   if (!RC.nrrrc)
+     ERROR_MSG_RET("no RRC present, cannot list counts\n");
+   if(!buf){
+     ERROR_MSG_RET("Please provide neighbour cell id and ue id\n");
+   } else{
+     // Parse neighbour cell PCI
+     char *token = strtok(buf, ",");
+     if (!token) {
+      ERROR_MSG_RET("Invalid input. Expected format: Neighbour PCI, ueId\n");
+     }
+     uint32_t neighbour_pci = strtol(token, NULL, 10);
+     // Parse ueId
+     token = strtok(NULL, ",");
+     if (!token) {
+       ERROR_MSG_RET("Missing UE ID\n");
+     }
+     uint32_t ueId = strtol(token, NULL, 10);
+
+     // Retrieve UE context
+     rrc_gNB_ue_context_t *ue_p = get_rrc_ue(ueId);
+     if (!ue_p) {
+       ERROR_MSG_RET("UE with id %u not found\n", ueId);
+     }
+     gNB_RRC_UE_t *UE = &ue_p->ue_context;
+
+     // Trigger Xn handover
+     nr_HO_Xn_trigger_telnet(RC.nrrrc[0], neighbour_pci, UE->rrc_ue_id);
+
+     // Print success message
+     prnt("RRC Xn handover triggered for UE %u with neighbour pci %u\n",
+          ueId,
+          neighbour_pci);
+    }
+   return 0;
 }
 
 extern void nr_HO_F1_trigger_telnet(gNB_RRC_INST *rrc, uint32_t rrc_ue_id);
@@ -405,6 +490,7 @@ static telnetshell_cmddef_t cicmds[] = {
     {"trigger_bwp_switch", "newBWPId [rnti(hex,opt)]", trigger_bwp_switch},
     {"trigger_n2_ho", "[neighbour_pci(uint32_t),ueId(uint32_t)]", rrc_gNB_trigger_n2_ho},
     {"pdu_session_release", "[gNB_ue_ngap_id(int,opt)]", trigger_ngap_pdu_session_release},
+    {"trigger_xn_ho", "[neighbour_pci(uint32_t),ueId(uint32_t)]", rrc_gNB_trigger_xn_ho},
     {"", "", NULL},
 };
 
