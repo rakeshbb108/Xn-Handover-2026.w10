@@ -194,13 +194,23 @@ static void fix_benetel_setting(xran_mplane_t *xran_mplane, const uint32_t inter
   }
 }
 
+static void fix_vvdn_setting(xran_mplane_t *xran_mplane, const uint32_t interface_mtu, const int16_t first_iq_width, const int max_num_ant, const char *model_name)
+{
+  xran_mplane->mtu = 8870; // interface MTU unreliable/not correctly reported by VVDN O-RU, hardcoding to 8870
+  xran_mplane->iq_width = 16; // IQ bitwidth unreliable/not correctly reported by VVDN O-RU, hardcoding to 16
+  xran_mplane->prach_offset = max_num_ant;
+  xran_mplane->max_tx_gain = 30.0;
+}
+
 bool get_config_for_xran(const char *buffer, const int max_num_ant, xran_mplane_t *xran_mplane)
 {
   /* some O-RU vendors are not fully compliant as per M-plane specifications */
   char *ru_vendor = get_ru_xml_node(buffer, "mfg-name");
 
   // RU MAC
-  xran_mplane->ru_mac_addr = get_ru_xml_node(buffer, "mac-address"); // TODO: support for VVDN, as it defines multiple MAC addresses
+  if(strcmp(ru_vendor, "BENETEL") == 0) {  
+    xran_mplane->ru_mac_addr = get_ru_xml_node(buffer, "mac-address"); 
+  }
 
   // MTU
   char *int_mtu_str = get_ru_xml_node(buffer, "l2-mtu");
@@ -248,15 +258,19 @@ bool get_config_for_xran(const char *buffer, const int max_num_ant, xran_mplane_
   free(managed_delay);
 
   // Store the max gain
-  char *max_tx_gain_str = get_ru_xml_node(buffer, "max-gain");
-  xran_mplane->max_tx_gain = (double)atof(max_tx_gain_str);
-  free(max_tx_gain_str);
+  if (strcasecmp(ru_vendor, "BENETEL") == 0) {
+    char *max_tx_gain_str = get_ru_xml_node(buffer, "max-gain");
+    xran_mplane->max_tx_gain = (double)atof(max_tx_gain_str);
+    free(max_tx_gain_str);
+  }
 
   // Model name
   char *model_name = get_ru_xml_node(buffer, "model-name");
 
   if (strcasecmp(ru_vendor, "BENETEL") == 0 /* || strcmp(ru_vendor, "VVDN-LPRU") == 0 || strcmp(ru_vendor, "Metanoia") == 0 */) {
     fix_benetel_setting(xran_mplane, interface_mtu, first_iq_width, max_num_ant, model_name);
+  } else if(strcasecmp(ru_vendor, "VVDN-LPRU") == 0) {
+    fix_vvdn_setting(xran_mplane, interface_mtu, first_iq_width, max_num_ant, model_name);
   } else {
     AssertError(false, return false, "[MPLANE] %s RU currently not supported.\n", ru_vendor);
   }

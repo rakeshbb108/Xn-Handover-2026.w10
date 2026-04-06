@@ -90,35 +90,70 @@ bool init_mplane(ru_session_list_t *ru_session_list)
   int num_rus = gpd(fhip, nump, ORAN_CONFIG_RU_IP_ADDR)->numelt;
   char **ru_usernames = gpd(fhip, nump, ORAN_CONFIG_RU_USERNAME)->strlistptr;
   int num_ru_users = gpd(fhip, nump, ORAN_CONFIG_RU_USERNAME)->numelt;
+  char **ru_mac_addr = gpd(fhip, nump, ORAN_CONFIG_RU_ADDR)->strlistptr;
   char **du_mac_addr = gpd(fhip, nump, ORAN_CONFIG_DU_ADDR)->strlistptr;
   int num_dus = gpd(fhip, nump, ORAN_CONFIG_DU_ADDR)->numelt;
   int32_t *vlan_tag = gpd(fhip, nump, ORAN_CONFIG_VLAN_TAG)->iptr;
   int num_vlan_tags = gpd(fhip, nump, ORAN_CONFIG_VLAN_TAG)->numelt;
 
-  AssertError(num_rus == num_ru_users, return false, "[MPLANE] Number of RUs should be equal to the number of users, one for each.\n");
+  // AssertError(num_rus == num_ru_users, return false, "[MPLANE] Number of RUs should be equal to the number of users, one for each.\n");
   AssertError(num_dus == num_vlan_tags, return false, "[MPLANE] Number of DU MAC addresses should be equal to the number of VLAN tags.\n");
  
-  int num_cu_planes = num_dus / num_rus;
+  // int num_cu_planes = num_dus / num_rus;
+  int num_cu_planes = num_dus; // for now, assuming each RU has one CU-plane, and thus one DU MAC address and one VLAN tag per RU; will need to be adapted when supporting multiple CU-planes per RU
+  // printf("[MPLANE] configuration loaded: %d RU(s), %d DU MAC address(es) and VLAN tag(s), %d CU plane(s) per RU.\n", num_rus, num_dus, num_cu_planes);
 
-  ru_session_list->num_rus = num_rus;
-  ru_session_list->ru_session = calloc(num_rus, sizeof(ru_session_t));
-  for (size_t i = 0; i < num_rus; i++) {
-    ru_session_t *ru_session = &ru_session_list->ru_session[i];
-    ru_session->session = NULL;
-    ru_session->ru_ip_add = calloc(strlen(ru_ip_addrs[i]) + 1, sizeof(char));
-    memcpy(ru_session->ru_ip_add, ru_ip_addrs[i], strlen(ru_ip_addrs[i]) + 1);
-    ru_session->username = calloc(strlen(ru_usernames[i]) + 1, sizeof(char));
-    memcpy(ru_session->username, ru_usernames[i], strlen(ru_usernames[i]) + 1);
+  if(num_rus == 0) {
+    /* Still incomplete for call-home from multiple RUs, works for call-home from single RU */
+    MP_LOG_I("No RU IP address configured. Waiting for Call-home.\n");
+    if(ru_session_list->ru_session == NULL) {
+      ru_session_list->ru_session = calloc(num_ru_users, sizeof(ru_session_t));
+      for(size_t i = 0; i < num_ru_users; i++) {
+        ru_session_t *ru_session = &ru_session_list->ru_session[i];
+        ru_session->session = NULL;
+        listen_mplane(&ru_session, ru_session_list->du_key_pair, ru_usernames[i], i);
+        num_rus +=1;
+        ru_session->username = calloc(strlen(ru_usernames[i]) + 1, sizeof(char));
+        memcpy(ru_session->username, ru_usernames[i], strlen(ru_usernames[i]) + 1);
+        ru_session->xran_mplane.ru_mac_addr = calloc(1, strlen(ru_mac_addr[i]) + 1);
+        memcpy(ru_session->xran_mplane.ru_mac_addr, ru_mac_addr[i], strlen(ru_mac_addr[i]) + 1);
 
-    // store DU MAC addresses and VLAN tags
-    ru_session->ru_mplane_config.num_cu_planes = num_cu_planes;
-    ru_session->ru_mplane_config.du_mac_addr = calloc_or_fail(num_cu_planes, sizeof(char*));
-    ru_session->ru_mplane_config.vlan_tag = calloc_or_fail(num_cu_planes, sizeof(int32_t));
-    for (int j = 0; j < num_cu_planes; j++) {
-      const int idx = i*num_cu_planes+j;
-      ru_session->ru_mplane_config.du_mac_addr[j] = calloc(1, strlen(du_mac_addr[idx]) + 1);
-      memcpy(ru_session->ru_mplane_config.du_mac_addr[j], du_mac_addr[idx], strlen(du_mac_addr[idx]) + 1);
-      ru_session->ru_mplane_config.vlan_tag[j] = vlan_tag[idx];
+        // store DU MAC addresses and VLAN tags
+        ru_session->ru_mplane_config.num_cu_planes = num_cu_planes;
+        ru_session->ru_mplane_config.du_mac_addr = calloc_or_fail(num_cu_planes, sizeof(char*));
+        ru_session->ru_mplane_config.vlan_tag = calloc_or_fail(num_cu_planes, sizeof(int32_t));
+        for (int j = 0; j < num_cu_planes; j++) {
+          const int idx = i*num_cu_planes+j;
+          ru_session->ru_mplane_config.du_mac_addr[j] = calloc(1, strlen(du_mac_addr[idx]) + 1);
+          memcpy(ru_session->ru_mplane_config.du_mac_addr[j], du_mac_addr[idx], strlen(du_mac_addr[idx]) + 1);
+          ru_session->ru_mplane_config.vlan_tag[j] = vlan_tag[idx];
+        }
+        ru_session_list->num_rus = num_rus;
+      }
+    }
+  } else {
+    ru_session_list->num_rus = num_rus;
+    ru_session_list->ru_session = calloc(num_rus, sizeof(ru_session_t));
+    for (size_t i = 0; i < num_rus; i++) {
+      ru_session_t *ru_session = &ru_session_list->ru_session[i];
+      ru_session->session = NULL;
+      ru_session->ru_ip_add = calloc(strlen(ru_ip_addrs[i]) + 1, sizeof(char));
+      memcpy(ru_session->ru_ip_add, ru_ip_addrs[i], strlen(ru_ip_addrs[i]) + 1);
+      ru_session->username = calloc(strlen(ru_usernames[i]) + 1, sizeof(char));
+      memcpy(ru_session->username, ru_usernames[i], strlen(ru_usernames[i]) + 1);
+      ru_session->xran_mplane.ru_mac_addr = calloc(1, strlen(ru_mac_addr[i]) + 1);
+      memcpy(ru_session->xran_mplane.ru_mac_addr, ru_mac_addr[i], strlen(ru_mac_addr[i]) + 1);
+
+      // store DU MAC addresses and VLAN tags
+      ru_session->ru_mplane_config.num_cu_planes = num_cu_planes;
+      ru_session->ru_mplane_config.du_mac_addr = calloc_or_fail(num_cu_planes, sizeof(char*));
+      ru_session->ru_mplane_config.vlan_tag = calloc_or_fail(num_cu_planes, sizeof(int32_t));
+      for (int j = 0; j < num_cu_planes; j++) {
+        const int idx = i*num_cu_planes+j;
+        ru_session->ru_mplane_config.du_mac_addr[j] = calloc(1, strlen(du_mac_addr[idx]) + 1);
+        memcpy(ru_session->ru_mplane_config.du_mac_addr[j], du_mac_addr[idx], strlen(du_mac_addr[idx]) + 1);
+        ru_session->ru_mplane_config.vlan_tag[j] = vlan_tag[idx];
+      }
     }
   }
 
@@ -207,25 +242,25 @@ bool manage_ru(ru_session_t *ru_session, const openair0_config_t *oai, const siz
   AssertError(success, return false, "[MPLANE] Unable to get U-plane info from RU operational datastore.\n");
 
   // Performance Management
-  success = get_pm_object_list(operational_ds, &ru_session->pm_stats);
-  AssertError(success, return false, "[MPLANE] Unable to retrieve performance measurement names from RU \"%s\".\n", ru_session->ru_ip_add);
+  // success = get_pm_object_list(operational_ds, &ru_session->pm_stats);
+  // AssertError(success, return false, "[MPLANE] Unable to retrieve performance measurement names from RU \"%s\".\n", ru_session->ru_ip_add);
 
   success = load_yang_models(ru_session, operational_ds);
   AssertError(success, return false, "[MPLANE] Unable to load yang models.\n");
 
-  while (1) {
-    sleep(5);
-    if (!ru_session->ru_notif.ptp_state && !ru_session->ru_notif.hardware.oper_state && !ru_session->ru_notif.hardware.admin_state && !ru_session->ru_notif.hardware.avail_state) {
-      char *content = NULL;
-      success = configure_ru_from_yang(ru_session, oai, num_rus, &content);
-      AssertError(success, return false, "[MPLANE] Unable to create content for <edit-config> RPC for start-up procedure.\n");
+  // while (1) {
+  //   sleep(5);
+    // if (!ru_session->ru_notif.ptp_state && !ru_session->ru_notif.hardware.oper_state && !ru_session->ru_notif.hardware.admin_state && !ru_session->ru_notif.hardware.avail_state) {
+      // char *content = NULL;
+      // success = configure_ru_from_yang(ru_session, oai, num_rus, &content);
+      // AssertError(success, return false, "[MPLANE] Unable to create content for <edit-config> RPC for start-up procedure.\n");
 
-      success = edit_val_commmit_rpc(ru_session, content);
-      AssertError(success, return false, "[MPLANE] Unable to continue.\n");
-      free(content);
-      break;
-    }
-  }
+      // success = edit_val_commmit_rpc(ru_session, content);
+      // AssertError(success, return false, "[MPLANE] Unable to continue.\n");
+      // free(content);
+      // break;
+    // }
+  // }
 
   free(operational_ds);
   free(watchdog_answer);

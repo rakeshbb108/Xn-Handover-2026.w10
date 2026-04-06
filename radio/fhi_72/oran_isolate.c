@@ -356,28 +356,28 @@ __attribute__((__visibility__("default"))) int transport_init(openair0_device_t 
     AssertFatal(false, "[MPLANE] Stopping M-plane.\n");
   }
 
-  while (true) {
-    sleep(1);
-    bool all_rus_ready = true;
-    for (int i = 0; i < ru_session_list->num_rus; i++) {
-      ru_session_t *ru_session = &ru_session_list->ru_session[i];
-      if (!ru_ready[i] && ru_session->ru_notif.config_change && !ru_session->ru_notif.rx_carrier_state && !ru_session->ru_notif.tx_carrier_state) {
-        MP_LOG_I("RU \"%s\" is now ready.\n", ru_session->ru_ip_add);
-        ru_ready[i] = true;
-        if (!ru_session->pm_stats.start_up_timing) {
-          success = pm_conf(ru_session, "true");
-          if (success)
-            MP_LOG_I("Sucessfully activated PM after start-up procedure for RU \"%s\".\n", ru_session->ru_ip_add);
-        }
-      } else {
-        all_rus_ready = false;
-        break;
-      }
-    }
-    if (all_rus_ready) {
-      break;
-    }
-  }
+  // while (true) {
+  //   sleep(1);
+  //   bool all_rus_ready = true;
+  //   for (int i = 0; i < ru_session_list->num_rus; i++) {
+  //     ru_session_t *ru_session = &ru_session_list->ru_session[i];
+  //     if (!ru_ready[i] && ru_session->ru_notif.config_change && !ru_session->ru_notif.rx_carrier_state && !ru_session->ru_notif.tx_carrier_state) {
+  //       MP_LOG_I("RU \"%s\" is now ready.\n", ru_session->ru_ip_add);
+  //       ru_ready[i] = true;
+  //       if (!ru_session->pm_stats.start_up_timing) {
+  //         success = pm_conf(ru_session, "true");
+  //         if (success)
+  //           MP_LOG_I("Sucessfully activated PM after start-up procedure for RU \"%s\".\n", ru_session->ru_ip_add);
+  //       }
+  //     } else {
+  //       all_rus_ready = false;
+  //       break;
+  //     }
+  //   }
+  //   if (all_rus_ready) {
+  //     break;
+  //   }
+  // }
 
   eth->mplane_priv = ru_session_list;
 

@@ -26,6 +26,8 @@
 #include <libyang/libyang.h>
 #include <nc_client.h>
 
+#define CLI_CH_TIMEOUT 10         // time to wait for call-home
+
 static int my_auth_hostkey_check(const char *hostname, ssh_session session, void *priv)
 {
   (void)hostname;
@@ -33,6 +35,51 @@ static int my_auth_hostkey_check(const char *hostname, ssh_session session, void
   (void)priv;
 
   return 0;
+}
+
+/* be aware that this function might need to be expanded to unix and TLS use cases */
+int listen_mplane(ru_session_t **ru_session, char **du_key_pair, char *ru_username, size_t num_ru)
+{
+  int port = NC_PORT_CH_SSH;
+  char *host = "0.0.0.0";       // better IPv4
+  int timeout = CLI_CH_TIMEOUT;
+
+  /* create the session */
+  nc_client_ssh_ch_set_username(ru_username);
+  nc_client_ssh_ch_add_bind_listen(host, port);
+
+  nc_client_ssh_ch_set_auth_pref(NC_SSH_AUTH_PASSWORD, -1);
+  nc_client_ssh_ch_set_auth_pref(NC_SSH_AUTH_PUBLICKEY, 1);  // ssh-key identification
+  nc_client_ssh_ch_set_auth_pref(NC_SSH_AUTH_INTERACTIVE, -1);
+
+  static u_int16_t set = 0;
+  if (!set) {
+    int keypair_ret = nc_client_ssh_ch_add_keypair(du_key_pair[0], du_key_pair[1]);
+    assert(keypair_ret == 0 && "Unable to authenticate RU\n");
+    set = 1;
+  }
+  nc_client_ssh_ch_set_auth_hostkey_check_clb(my_auth_hostkey_check, "DATA");  // host-key identification
+
+  printf("Waiting %ds for an SSH Call Home connection on port %u...\n", timeout, port);
+
+  int ret = nc_accept_callhome(timeout * 1000, NULL, &ru_session[num_ru]->session); // check the right session; maybe session[0] is already ongoing, and need to create session[1]
+  if(!set){
+    assert(ret == 1 && "SSH Call Home failed.");
+  }else{
+    if(ret != 1){
+      printf("[ERROR] SSH Call Home failed.\n");
+      return 0;
+    }
+  }
+
+  nc_client_ssh_ch_del_bind(host, port);
+
+  const char *ru_ip_add = nc_session_get_host(ru_session[num_ru]->session);
+  ru_session[num_ru]->ru_ip_add = malloc(strlen(ru_ip_add) + 1);
+  memcpy(ru_session[num_ru]->ru_ip_add, ru_ip_add, strlen(ru_ip_add) + 1);
+  printf("Successfuly connected to RU with IP address %s\n", ru_session[num_ru]->ru_ip_add);
+
+  return 1;
 }
 
 bool connect_mplane(ru_session_t *ru_session)
