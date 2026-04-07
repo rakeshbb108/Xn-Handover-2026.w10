@@ -1987,6 +1987,7 @@ bool nr_check_Msg4_MsgB_Ack(module_id_t module_id, frame_t frame, slot_t slot, N
             UE->rnti,
             ra_type_str,
             UE->CellGroup ? "UE Connected" : "UE Rejected");
+      nr_mac->ra_successful++;
       if (UE->CellGroup) {
         // we configure the UE using common search space with DCIX0 while waiting for a reconfiguration
         configure_UE_BWP(nr_mac, scc, UE, false, NR_SearchSpace__searchSpaceType_PR_common, -1, -1);

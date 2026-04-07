@@ -28,6 +28,7 @@
  */
 #include <stdlib.h>
 #include <arpa/inet.h>
+#include <time.h>
 #include "assertions.h"
 #include "common/utils/LOG/log.h"
 #include "tree.h"
@@ -35,6 +36,9 @@
 #include "rrc_cell_management.h"
 #include "rrc_gNB_NGAP.h"
 #include "openair2/RRC/NR/rrc_gNB_radio_bearers.h"
+
+extern struct timespec ho_start_time;
+extern int ho_timer_running;
 
 static sctp_assoc_t get_target_assoc_id(gNB_RRC_INST *rrc, uint32_t gNB_ID){
   if (RB_EMPTY(&rrc->neighs)) {
@@ -590,9 +594,9 @@ int rrc_gNB_process_XNAP_UE_CONTEXT_RELEASE(gNB_RRC_INST *rrc, instance_t instan
   }
   gNB_RRC_UE_t *UE = &ue_context_p->ue_context;
   UE->rrc_release = true;
-#ifdef E2_AGENT
-  signal_rrc_state_changed_to(UE, RRC_IDLE_RRC_STATE_E2SM_RC);
-#endif
+//#ifdef E2_AGENT
+//  signal_rrc_state_changed_to(UE, RRC_IDLE_RRC_STATE_E2SM_RC);
+//#endif
 
   /* a UE might not be associated to a CU-UP if it never requested a PDU
    * session (intentionally, or because of erros) */
@@ -615,7 +619,20 @@ int rrc_gNB_process_XNAP_UE_CONTEXT_RELEASE(gNB_RRC_INST *rrc, instance_t instan
     // the DU is offline already
     rrc_remove_ue(rrc, ue_context_p);
   }
- 
+
+  rrc->xn_handover_success++;
+  if (ho_timer_running) {
+    struct timespec ho_end_time;
+    clock_gettime(CLOCK_MONOTONIC, &ho_end_time);
+
+    double latency_ms =
+        (ho_end_time.tv_sec - ho_start_time.tv_sec) * 1000.0 +
+        (ho_end_time.tv_nsec - ho_start_time.tv_nsec) / 1e6;
+
+    rrc->ho_xn_latency = latency_ms;
+
+    ho_timer_running = 0;
+  }
   LOG_I(NR_RRC,"XN Handover Completed\n");
   return 0;
 }

@@ -97,6 +97,8 @@ void L1_nr_prach_procedures(PHY_VARS_gNB *gNB, int frame, int slot, nfapi_nr_rac
             prachStartSymbol,
             prach_pdu->num_ra);
 
+      gNB->ra_procedure++;
+
       T(T_ENB_PHY_INITIATE_RA_PROCEDURE,
         T_INT(gNB->Mod_id),
         T_INT(frame),

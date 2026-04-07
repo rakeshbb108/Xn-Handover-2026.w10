@@ -187,7 +187,7 @@ static int get_stats(char *buf, int debug, telnet_printfunc_t prnt)
     prnt("    \"rrc_setup_success_rate\": %d,\n",rrc_setup_success_rate);
     prnt("    \"Max_XN_HO\": %d,\n",rrc->xn_handover_success);
     prnt("    \"XN_HO_Success_rate\": %d,\n",xn_ho_success_rate);
-    prnt("    \"XN_HO_Latency\": %d,\n",rrc->ho_xn_latency);
+    prnt("    \"XN_HO_Latency\": %0.3f,\n",rrc->ho_xn_latency);
     prnt("    \"NUM_CUUPS\": %d,\n",rrc->num_cuups);
     prnt("    \"vendor\": \"OpenAirInterface\"\n");
     prnt("  }\n");

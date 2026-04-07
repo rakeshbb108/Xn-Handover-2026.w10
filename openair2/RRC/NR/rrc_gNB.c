@@ -116,6 +116,8 @@
 #endif
 
 mui_t rrc_gNB_mui = 0;
+struct timespec ho_start_time = {0};
+int ho_timer_running = 0;
 
 /* Per-transaction max_delays counter to limit retry attempts */
 #define MAX_DELAYS 100
@@ -585,6 +587,7 @@ static void rrc_gNB_generate_RRCSetup(instance_t instance,
 
   gNB_RRC_UE_t *ue_p = &ue_context_pP->ue_context;
   gNB_RRC_INST *rrc = RC.nrrrc[instance];
+  rrc->rrc_setup++;
   unsigned char buf[1024];
   uint8_t xid = rrc_gNB_get_next_transaction_identifier(instance);
   ue_p->xids[xid] = RRC_SETUP;
@@ -1821,6 +1824,9 @@ static void process_Event_Based_Measurement_Report(gNB_RRC_INST *rrc,
                 // Trigger Xn Handover
                 LOG_I(NR_RRC,"HO_LOG: Found Xn Neighbour!");
                 LOG_I(NR_RRC, "HO LOG: Serving Cell RSRP: %d - Best Neighbor RSRP: %d ! Trigger Xn HO\n", servingCellRSRP, best_rsrp);
+		rrc->xn_handover_triggered++;
+		clock_gettime(CLOCK_MONOTONIC, &ho_start_time);
+                ho_timer_running = 1;
                 nr_rrc_trigger_xn_ho(rrc, ue, scell_pci, neighbour);
               } else {
                 LOG_I(NR_RRC, "HO LOG: Serving Cell RSRP: %d - Best Neighbor RSRP: %d ! Trigger N2 HO\n", servingCellRSRP, best_rsrp);
@@ -2227,6 +2233,7 @@ static int rrc_gNB_decode_dcch(gNB_RRC_INST *rrc, const f1ap_ul_rrc_message_t *m
     return -1;
   }
   gNB_RRC_UE_t *UE = &ue_context_p->ue_context;
+  gNB_RRC_INST *nr_rrc = RC.nrrrc[0];
 
   if (msg->srb_id < 1 || msg->srb_id > 2) {
     LOG_E(NR_RRC, "Received message on SRB %d, discarding message\n", msg->srb_id);
@@ -2268,6 +2275,7 @@ static int rrc_gNB_decode_dcch(gNB_RRC_INST *rrc, const f1ap_ul_rrc_message_t *m
 
       case NR_UL_DCCH_MessageType__c1_PR_rrcSetupComplete:
         LOG_UE_UL_EVENT(UE, "Received RRCSetupComplete (RRC_CONNECTED reached)\n");
+	nr_rrc->rrc_setup_complete++;
         handle_rrcSetupComplete(rrc, UE, ul_dcch_msg->message.choice.c1->choice.rrcSetupComplete);
         break;
 
