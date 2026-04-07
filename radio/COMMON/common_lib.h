@@ -39,6 +39,7 @@
 #include <openair1/PHY/TOOLS/tools_defs.h>
 #include "record_player.h"
 #include "common/utils/threadPool/notified_fifo.h"
+#include "radio/fhi_72/mplane/ru-mplane-api.h"
 
 /* default name of shared library implementing the radio front end */
 #define OAI_RF_LIBNAME        "oai_device"
@@ -205,6 +206,8 @@ typedef struct split7_config {
   uint16_t ul_k0[5];
   uint16_t cp_prefix0;
   uint16_t cp_prefix_other;
+  /*! this is to store the information on the sessions of the RU connected */
+  ru_session_list_t ru_sessions;
 
 } split7_config_t;
 

@@ -32,6 +32,7 @@
 #include "openair2/GNB_APP/gnb_config.h"
 #include "nr_pdcp/nr_pdcp_oai_api.h"
 #include "common/utils/time_manager/time_manager.h"
+#include "radio/fhi_72/mplane/subscribe-mplane.h"
 
 RAN_CONTEXT_t RC;
 THREAD_STRUCT thread_struct;
@@ -39,6 +40,9 @@ uint64_t downlink_frequency[MAX_NUM_CCs][4];
 int32_t uplink_frequency_offset[MAX_NUM_CCs][4];
 int oai_exit = 0;
 instance_t CUuniqInstance = 0;
+
+uint32_t mplane_enabled = 0; // This variable is irrelevant here, adding temporarily.
+ru_global_metrics_t ru_global_metrics;
 
 #ifdef E2_AGENT
 #include "openair2/E2AP/flexric/src/agent/e2_agent_api.h"

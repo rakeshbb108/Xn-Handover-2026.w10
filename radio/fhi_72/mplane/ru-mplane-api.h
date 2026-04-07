@@ -145,6 +145,33 @@ typedef struct {
   char **name;
 } uplane_info_t;
 
+typedef struct array_carrier {
+  char name[50];
+  uint32_t arfcn_center;
+  uint64_t center_channel_bw;
+  uint32_t channel_bw;
+  char ru_carrier[10];
+  char rw_duplex_scheme[10];
+  char rw_type[10];
+  uint8_t dl_radio_frame_offset;
+  uint8_t dl_sfn_offset;
+  float gain_correction;
+  float gain;
+  uint32_t n_ta_offset;
+} array_carrier_t;
+
+typedef struct delay_management {
+	uint32_t T2a_min_up;
+	uint32_t T2a_max_up;
+	uint32_t T2a_min_cp_dl;
+	uint32_t T2a_max_cp_dl;
+	uint32_t Tcp_adv_dl;
+	uint32_t Ta3_min;
+	uint32_t Ta3_max;
+	uint32_t T2a_min_cp_ul;
+	uint32_t T2a_max_cp_ul;
+} delay_management_t;
+
 typedef struct {
   size_t num_cu_planes;
   char **du_mac_addr; // one or two VF(s) for CU-planes
@@ -154,8 +181,29 @@ typedef struct {
   uplane_info_t rx_endpoints;
   uplane_info_t tx_carriers;
   uplane_info_t rx_carriers;
+  array_carrier_t tx_array_carrier;
+  array_carrier_t rx_array_carrier;
+  delay_management_t delay;
 
 } ru_mplane_config_t;
+
+typedef struct{
+  uint32_t total_rx_good_pkt_cnt;
+  uint32_t total_rx_bit_rate;
+  uint32_t oran_rx_on_time;
+  uint32_t oran_rx_early;
+  uint32_t oran_rx_late;
+  uint32_t oran_rx_corrupt;
+  uint32_t oran_rx_total;
+  uint32_t oran_rx_total_c;
+  uint32_t oran_rx_on_time_c;
+  uint32_t oran_rx_early_c;
+  uint32_t oran_rx_late_c;
+  uint32_t oran_rx_error_drop;
+  uint32_t oran_tx_total;
+  uint32_t oran_tx_total_c;
+
+} ru_mplane_metrics_t;
 
 typedef struct {
   // activation if required at start-up timing
@@ -173,6 +221,7 @@ typedef struct {
   char *username;
   char *ru_ip_add;
   ru_mplane_config_t ru_mplane_config;
+  ru_mplane_metrics_t ru_mplane_metrics;
   void *session;
   void *ctx;
   xran_mplane_t xran_mplane;

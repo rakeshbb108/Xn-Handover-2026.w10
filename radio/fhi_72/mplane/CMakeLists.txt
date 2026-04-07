@@ -33,6 +33,7 @@ target_sources(oran_fhlib_5g_mplane PRIVATE
                config-mplane.c
                ru-mplane-api.c
                xml/get-xml.c
+               xml/create-xml-config.c
                yang/get-yang.c
                yang/create-yang-config.c
 )

@@ -79,6 +79,7 @@ unsigned short config_frames[4] = {2,9,11,13};
 #include "openair2/E1AP/e1ap_common.h"
 #include "pdcp.h"
 #include "radio/COMMON/common_lib.h"
+#include "radio/fhi_72/mplane/subscribe-mplane.h"
 #include "s1ap_eNB.h"
 #include "sctp_eNB_task.h"
 #include "system.h"
@@ -97,6 +98,8 @@ pthread_mutex_t sync_mutex;
 int sync_var=-1; //!< protected by mutex \ref sync_mutex.
 int config_sync_var=-1;
 int oai_exit = 0;
+uint32_t mplane_enabled = 0;
+ru_global_metrics_t ru_global_metrics;
 
 unsigned int mmapped_dma=0;
 

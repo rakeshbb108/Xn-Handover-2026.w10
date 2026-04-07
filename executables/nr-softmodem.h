@@ -27,6 +27,7 @@
   {"U" ,                    CONFIG_HLP_ULBM_PHYTEST,   0,                .u64ptr=&ulsch_slot_bitmap,          .defint64val=0,                   TYPE_UINT64, 0},        \
   {"usrp-tx-thread-config", CONFIG_HLP_USRP_THREAD,    0,                .iptr=&usrp_tx_thread,               .defstrval=0,                     TYPE_INT,    0},        \
   {"uecap_file",            CONFIG_HLP_UECAP_FILE,     0,                .strptr=&uecap_file,                 .defstrval="./uecap_ports1.xml",  TYPE_STRING, 0},        \
+  {"mplane",                NULL,                      PARAMFLAG_BOOL,   .uptr=&mplane_enabled,               .defintval=0,                     TYPE_UINT,   0},        \
 }
 // clang-format on
 

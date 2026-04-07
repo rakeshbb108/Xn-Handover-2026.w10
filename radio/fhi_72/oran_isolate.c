@@ -39,10 +39,9 @@
 // line and the use of VERSIONX further below. It is relative to phy/fhi_lib/lib/api
 #include "../../app/src/common.h"
 
-#ifdef OAI_MPLANE
 #include "mplane/init-mplane.h"
 #include "mplane/connect-mplane.h"
-#endif
+extern uint32_t mplane_enabled;
 
 typedef struct {
   eth_state_t e;
@@ -82,11 +81,11 @@ int trx_oran_stop(openair0_device_t *device)
   printf("ORAN: %s\n", __FUNCTION__);
   oran_eth_state_t *s = device->priv;
   xran_stop(s->oran_priv);
-#ifdef OAI_MPLANE
+if(mplane_enabled){
   printf("[MPLANE] Stopping M-plane.\n");
   disconnect_mplane(s->mplane_priv);
   free(s->mplane_priv);
-#endif
+}
   return (0);
 }
 
@@ -325,11 +324,13 @@ __attribute__((__visibility__("default"))) int transport_init(openair0_device_t 
   struct xran_fh_config fh_config[XRAN_PORTS_NUM] = {0};
 
   bool success = false;
-#ifdef OAI_MPLANE
+if(mplane_enabled){
   ru_session_list_t *ru_session_list = calloc(1, sizeof(*ru_session_list));
   assert(ru_session_list != NULL && "Memory exhausted");
   success = init_mplane(ru_session_list);
   AssertFatal(success, "[MPLANE] Cannot initialize M-plane.\n");
+  /* Temporarily added this code here to get the data to be sent in telnet for O1*/
+  memcpy(&openair0_cfg->split7.ru_sessions, ru_session_list, sizeof(ru_session_list_t));
 
   bool ru_configured[ru_session_list->num_rus];
   for (size_t i = 0; i < ru_session_list->num_rus; i++) {
@@ -357,36 +358,38 @@ __attribute__((__visibility__("default"))) int transport_init(openair0_device_t 
   }
 
   // while (true) {
-  //   sleep(1);
-  //   bool all_rus_ready = true;
-  //   for (int i = 0; i < ru_session_list->num_rus; i++) {
-  //     ru_session_t *ru_session = &ru_session_list->ru_session[i];
-  //     if (!ru_ready[i] && ru_session->ru_notif.config_change && !ru_session->ru_notif.rx_carrier_state && !ru_session->ru_notif.tx_carrier_state) {
-  //       MP_LOG_I("RU \"%s\" is now ready.\n", ru_session->ru_ip_add);
-  //       ru_ready[i] = true;
-  //       if (!ru_session->pm_stats.start_up_timing) {
-  //         success = pm_conf(ru_session, "true");
-  //         if (success)
-  //           MP_LOG_I("Sucessfully activated PM after start-up procedure for RU \"%s\".\n", ru_session->ru_ip_add);
-  //       }
-  //     } else {
-  //       all_rus_ready = false;
-  //       break;
-  //     }
-  //   }
-  //   if (all_rus_ready) {
-  //     break;
-  //   }
+    sleep(1);
+    bool all_rus_ready = true;
+    for (int i = 0; i < ru_session_list->num_rus; i++) {
+      ru_session_t *ru_session = &ru_session_list->ru_session[i];
+      if (!ru_ready[i] && ru_session->ru_notif.config_change && !ru_session->ru_notif.rx_carrier_state && !ru_session->ru_notif.tx_carrier_state) {
+        MP_LOG_I("RU \"%s\" is now ready.\n", ru_session->ru_ip_add);
+        ru_ready[i] = true;
+        if (!ru_session->pm_stats.start_up_timing) {
+          success = pm_conf(ru_session, "true");
+          if (success)
+            MP_LOG_I("Sucessfully activated PM after start-up procedure for RU \"%s\".\n", ru_session->ru_ip_add);
+        }
+      } else {
+        all_rus_ready = false;
+        // break;
+      }
+    }
+    if (all_rus_ready) {
+      // break;
+    }
   // }
 
   eth->mplane_priv = ru_session_list;
 
   success = get_xran_config(ru_session_list, openair0_cfg, &fh_init, fh_config);
   AssertFatal(success, "[MPLANE] Cannot configure xran with M-plane info.\n");
-#else
+  /* Temporarily added this code here to get the data to be sent in telnet for O1*/
+  memcpy(&openair0_cfg->split7.ru_sessions, ru_session_list, sizeof(ru_session_list_t));
+} else {
   success = get_xran_config(NULL, openair0_cfg, &fh_init, fh_config);
   AssertFatal(success, "cannot get configuration for xran\n");
-#endif
+}
 
   LOG_I(HW, "Initializing O-RAN 7.2 FH interface through xran library (compiled against headers of %s)\n", VERSIONX);
   eth->oran_priv = oai_oran_initialize(&fh_init, fh_config);

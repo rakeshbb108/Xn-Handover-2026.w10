@@ -33,11 +33,13 @@
 #include "telnetsrv.h"
 
 #include "openair2/RRC/NR/nr_rrc_defs.h"
+#include "openair1/PHY/defs_gNB.h"
 #include "openair2/LAYER2/NR_MAC_gNB/nr_mac_gNB.h"
 #include "openair2/LAYER2/NR_MAC_gNB/nr_radio_config.h"
 #include "openair2/LAYER2/NR_MAC_gNB/mac_proto.h"
 #include "openair2/LAYER2/nr_rlc/nr_rlc_oai_api.c"
 #include "common/utils/nr/nr_common.h"
+#include "radio/fhi_72/mplane/subscribe-mplane.h"
 
 #define ERROR_MSG_RET(mSG, aRGS...) do { prnt("FAILURE: " mSG, ##aRGS); return 1; } while (0)
 
@@ -59,6 +61,9 @@
 #define SD      "nrcelldu3gpp:sd"
 #define SST     "nrcelldu3gpp:sst"
 
+extern uint32_t mplane_enabled;
+
+extern ru_global_metrics_t ru_global_metrics;
 typedef struct b {
   long int dl;
   long int ul;
@@ -175,6 +180,83 @@ static int get_stats(char *buf, int debug, telnet_printfunc_t prnt)
     prnt("      \"" SD  "\": %d,\n", cell_info->nssai[0].sd);
     prnt("      \"" SST "\": %d\n", cell_info->nssai[0].sst);
     prnt("    },\n");
+    if(mplane_enabled){
+      ru_mplane_config_t *oru = &RC.ru[0]->openair0_cfg.split7.ru_sessions.ru_session[0].ru_mplane_config; // hardcoding to send only one RU related data.
+      ru_mplane_metrics_t *oru_metrics = &RC.ru[0]->openair0_cfg.split7.ru_sessions.ru_session[0].ru_mplane_metrics; // hardcoding to send only one RU related data.
+
+      prnt("  \"o-ru-stats\": {\n");
+      prnt("    \"o-ran-uplane-conf\": [\n");
+      prnt("      {\n");
+      prnt("        \"tx-array-carrier:absolute-frequency-center\": %d,\n", oru->tx_array_carrier.arfcn_center);
+      prnt("        \"tx-array-carrier:center-of-channel-bandwidth\": %ld,\n", oru->tx_array_carrier.center_channel_bw);
+      prnt("        \"tx-array-carrier:channel-bandwidth\": %d,\n", oru->tx_array_carrier.channel_bw);
+      prnt("        \"tx-array-carrier:active\": \"%s\",\n", oru->tx_array_carrier.ru_carrier);
+      prnt("        \"tx-array-carrier:rw-duplex-scheme\": \"%s\",\n", oru->tx_array_carrier.rw_duplex_scheme);
+      prnt("        \"tx-array-carrier:rw-type\": \"%s\",\n", oru->tx_array_carrier.rw_type);
+      prnt("        \"tx-array-carrier:gain\": %.2f,\n", oru->tx_array_carrier.gain);
+      prnt("        \"tx-array-carrier:downlink-radio-frame-offset\": %d,\n", oru->tx_array_carrier.dl_radio_frame_offset);
+      prnt("        \"tx-array-carrier:downlink-sfn-offset\": %d\n", oru->tx_array_carrier.dl_sfn_offset);
+      prnt("      },\n");
+      prnt("      {\n");
+      prnt("        \"rx-array-carrier:absolute-frequency-center\": %d,\n", oru->tx_array_carrier.arfcn_center);
+      prnt("        \"rx-array-carrier:center-of-channel-bandwidth\": %ld,\n", oru->tx_array_carrier.center_channel_bw);
+      prnt("        \"rx-array-carrier:channel-bandwidth\": %d,\n", oru->tx_array_carrier.channel_bw);
+      prnt("        \"rx-array-carrier:active\": \"%s\",\n", oru->tx_array_carrier.ru_carrier);
+      prnt("        \"rx-array-carrier:downlink-radio-frame-offset\": %d,\n", oru->tx_array_carrier.dl_radio_frame_offset);
+      prnt("        \"rx-array-carrier:downlink-sfn-offset\": %d,\n", oru->tx_array_carrier.dl_sfn_offset);
+      prnt("        \"rx-array-carrier:gain-correction\": %.2f,\n", oru->tx_array_carrier.gain_correction);
+      prnt("        \"rx-array-carrier:n-ta-offset\": %d\n", oru->tx_array_carrier.n_ta_offset);
+      prnt("      }\n");
+      prnt("    ],\n");
+      prnt("    \"delay-management\": {\n");
+      prnt("      \"ru-delay-profile:t2a-min-up\": %d,\n", oru->delay.T2a_min_up);
+      prnt("      \"ru-delay-profile:t2a-max-up\": %d,\n", oru->delay.T2a_max_up);
+      prnt("      \"ru-delay-profile:t2a-min-cp-dl\": %d,\n", oru->delay.T2a_min_cp_dl);
+      prnt("      \"ru-delay-profile:t2a-max-cp-dl\": %d,\n", oru->delay.T2a_max_cp_dl);
+      prnt("      \"ru-delay-profile:tcp-adv-dl\": %d,\n", oru->delay.Tcp_adv_dl);
+      prnt("      \"ru-delay-profile:ta3-min\": %d,\n", oru->delay.Ta3_min);
+      prnt("      \"ru-delay-profile:ta3-max\": %d,\n", oru->delay.Ta3_max);
+      prnt("      \"ru-delay-profile:t2a-min-cp-ul\": %d,\n", oru->delay.T2a_min_cp_ul);
+      prnt("      \"ru-delay-profile:t2a-max-cp-ul\": %d\n", oru->delay.T2a_max_cp_ul);
+      prnt("    },\n");
+
+      // fill dummy metrics
+      ru_session_t *ru_session = &RC.ru[0]->openair0_cfg.split7.ru_sessions.ru_session[0];
+      ru_session->ru_mplane_metrics.total_rx_good_pkt_cnt = ru_global_metrics.total_rx_good_pkt_cnt;
+      ru_session->ru_mplane_metrics.total_rx_bit_rate =  ru_global_metrics.total_rx_bit_rate;
+      ru_session->ru_mplane_metrics.oran_rx_on_time = ru_global_metrics.oran_rx_on_time;
+      ru_session->ru_mplane_metrics.oran_rx_early =  ru_global_metrics.oran_rx_early;
+      ru_session->ru_mplane_metrics.oran_rx_late = ru_global_metrics.oran_rx_late;
+      ru_session->ru_mplane_metrics.oran_rx_corrupt =  ru_global_metrics.oran_rx_corrupt;
+      ru_session->ru_mplane_metrics.oran_rx_total = ru_global_metrics.oran_rx_total;
+      ru_session->ru_mplane_metrics.oran_rx_total_c = ru_global_metrics.oran_rx_total_c;
+      ru_session->ru_mplane_metrics.oran_rx_on_time_c = ru_global_metrics.oran_rx_on_time_c;
+      ru_session->ru_mplane_metrics.oran_rx_early_c = ru_global_metrics.oran_rx_early_c;
+      ru_session->ru_mplane_metrics.oran_rx_late_c = ru_global_metrics.oran_rx_late_c;
+      ru_session->ru_mplane_metrics.oran_rx_error_drop = ru_global_metrics.oran_rx_error_drop;
+      ru_session->ru_mplane_metrics.oran_tx_total = ru_global_metrics.oran_tx_total;
+      ru_session->ru_mplane_metrics.oran_tx_total_c = ru_global_metrics.oran_tx_total_c;
+      // end dummy fill
+
+      prnt("    \"o-ran-performance-counters\": {\n");
+      prnt("      \"performance-counters:total-rx-good-pkt-cnt\": %d,\n", oru_metrics->total_rx_good_pkt_cnt);
+      prnt("      \"performance-counters:total-rx-bit-rate\": %d,\n", oru_metrics->total_rx_bit_rate);
+      prnt("      \"performance-counters:oran-rx-on-time\": %d,\n", oru_metrics->oran_rx_on_time);
+      prnt("      \"performance-counters:oran-rx-early\": %d,\n", oru_metrics->oran_rx_early);
+      prnt("      \"performance-counters:oran-rx-late\": %d,\n", oru_metrics->oran_rx_late);
+      prnt("      \"performance-counters:oran-rx-corrupt\": %d,\n", oru_metrics->oran_rx_corrupt);
+      prnt("      \"performance-counters:oran-rx-total\": %d,\n", oru_metrics->oran_rx_total);
+      prnt("      \"performance-counters:oran-rx-total-c\": %d,\n", oru_metrics->oran_rx_total_c);
+      prnt("      \"performance-counters:oran-rx-on-time-c\": %d,\n", oru_metrics->oran_rx_on_time_c);
+      prnt("      \"performance-counters:oran-rx-early-c\": %d,\n", oru_metrics->oran_rx_early_c);
+      prnt("      \"performance-counters:oran-rx-late-c\": %d,\n", oru_metrics->oran_rx_late_c);
+      prnt("      \"performance-counters:oran-rx-error-drop\": %d,\n", oru_metrics->oran_rx_error_drop);
+      prnt("      \"performance-counters:oran-tx-total\": %d,\n", oru_metrics->oran_tx_total);
+      prnt("      \"performance-counters:oran-tx-total-c\": %d\n", oru_metrics->oran_tx_total_c);
+      prnt("    }\n");
+      prnt("  },\n");
+
+    }
     prnt("    \"device\": {\n");
     prnt("      \"gnbId\": %d,\n", sr->gNB_DU_id);
     prnt("      \"gnbName\": \"%s\",\n", sr->gNB_DU_name);

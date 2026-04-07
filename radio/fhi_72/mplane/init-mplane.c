@@ -27,6 +27,7 @@
 #include "xml/get-xml.h"
 #include "yang/get-yang.h"
 #include "yang/create-yang-config.h"
+#include "xml/create-xml-config.h"
 
 #include <libyang/libyang.h>
 #include <nc_client.h>
@@ -241,6 +242,18 @@ bool manage_ru(ru_session_t *ru_session, const openair0_config_t *oai, const siz
   success = get_uplane_info(operational_ds, &ru_session->ru_mplane_config);
   AssertError(success, return false, "[MPLANE] Unable to get U-plane info from RU operational datastore.\n");
 
+  success = get_uplane_conf_data(operational_ds, &ru_session->ru_mplane_config);
+  AssertError(success, return false, "[MPLANE] Unable to get complete U-plane configurations from RU operational datastore.\n");
+
+  // save the RU Delay management info
+  success = get_ru_delay_profile(operational_ds, &ru_session->ru_mplane_config);
+  AssertError(success, return false, "[MPLANE] Unable to get U-plane info from RU operational datastore.\n");
+
+  if(ru_session->ru_notif.ptp_state == true){
+    strcpy(ru_session[0].ru_mplane_config.tx_array_carrier.ru_carrier, "ACTIVE");
+    strcpy(ru_session[0].ru_mplane_config.rx_array_carrier.ru_carrier, "ACTIVE");
+  }
+
   // Performance Management
   // success = get_pm_object_list(operational_ds, &ru_session->pm_stats);
   // AssertError(success, return false, "[MPLANE] Unable to retrieve performance measurement names from RU \"%s\".\n", ru_session->ru_ip_add);
@@ -248,19 +261,22 @@ bool manage_ru(ru_session_t *ru_session, const openair0_config_t *oai, const siz
   success = load_yang_models(ru_session, operational_ds);
   AssertError(success, return false, "[MPLANE] Unable to load yang models.\n");
 
-  // while (1) {
-  //   sleep(5);
+  while (1) {
+    sleep(5);
+    printf("[MPLANE] ru_session->ru_notif.hardware.oper_state: %d, ru_session->ru_notif.hardware.admin_state: %d, ru_session->ru_notif.hardware.avail_state: %d, ru_session->ru_notif.ptp_state: %d\n", ru_session->ru_notif.hardware.oper_state, ru_session->ru_notif.hardware.admin_state, ru_session->ru_notif.hardware.avail_state, ru_session->ru_notif.ptp_state);
     // if (!ru_session->ru_notif.ptp_state && !ru_session->ru_notif.hardware.oper_state && !ru_session->ru_notif.hardware.admin_state && !ru_session->ru_notif.hardware.avail_state) {
-      // char *content = NULL;
+      char *content = NULL;
       // success = configure_ru_from_yang(ru_session, oai, num_rus, &content);
-      // AssertError(success, return false, "[MPLANE] Unable to create content for <edit-config> RPC for start-up procedure.\n");
+      success = configure_ru_from_xml(&ru_session[0].ru_mplane_config, &content );
+      printf("[MPLANE] Configuration content for <edit-config> RPC for start-up procedure: \n%s\n", content);
+      AssertError(success, return false, "[MPLANE] Unable to create content for <edit-config> RPC for start-up procedure.\n");
 
-      // success = edit_val_commmit_rpc(ru_session, content);
-      // AssertError(success, return false, "[MPLANE] Unable to continue.\n");
-      // free(content);
-      // break;
+      success = edit_val_commmit_rpc(ru_session, content);
+      AssertError(success, return false, "[MPLANE] Unable to continue.\n");
+      free(content);
+      break;
     // }
-  // }
+  }
 
   free(operational_ds);
   free(watchdog_answer);
