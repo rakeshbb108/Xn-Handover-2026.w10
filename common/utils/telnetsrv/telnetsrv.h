@@ -35,6 +35,8 @@
 
 #define TELNET_MAX_MSGLENGTH      2048
 #define TELNET_PROMPT_PREFIX      "softmodem"
+#define TELNET_PROMPT_CUUP_PREFIX "cuup"
+#define GET_CUUP_FUNC             "gnb"
 #define TELNET_MAXCMD             20
 #define TELNET_CMD_MAXSIZE        20
 #define TELNET_HELPSTR_SIZE       80

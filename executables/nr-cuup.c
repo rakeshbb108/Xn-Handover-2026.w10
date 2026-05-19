@@ -33,6 +33,8 @@
 #include "nr_pdcp/nr_pdcp_oai_api.h"
 #include "common/utils/time_manager/time_manager.h"
 #include "radio/fhi_72/mplane/subscribe-mplane.h"
+#include "common/config/config_userapi.h"
+#include "common/utils/load_module_shlib.h"
 
 RAN_CONTEXT_t RC;
 THREAD_STRUCT thread_struct;
@@ -40,6 +42,7 @@ uint64_t downlink_frequency[MAX_NUM_CCs][4];
 int32_t uplink_frequency_offset[MAX_NUM_CCs][4];
 int oai_exit = 0;
 instance_t CUuniqInstance = 0;
+instance_t DUuniqInstance = 0;
 
 uint32_t mplane_enabled = 0; // This variable is irrelevant here, adding temporarily.
 ru_global_metrics_t ru_global_metrics;
@@ -135,6 +138,23 @@ f1ap_cudu_inst_t *getCxt(instance_t instanceP)
   fake.gtpInst = e1inst->gtpInstF1U;
   return &fake;
 }
+
+void get_common_option(configmodule_interface_t *cfg){
+  uint32_t start_telnetsrv = 0, start_telnetclt = 0;
+
+  paramdef_t cmdline_logparams[] =CMDLINE_LOGPARAMS_DESCS;
+  int numlogparams = sizeofArray(cmdline_logparams);
+  config_get(cfg, cmdline_logparams, numlogparams, NULL);
+
+  if (start_telnetsrv) {
+    load_module_shlib("telnetsrv",NULL,0,NULL);
+  }
+
+  if (start_telnetclt) {
+    IS_SOFTMODEM_TELNETCLT = true;
+  }
+}
+
 configmodule_interface_t *uniqCfg = NULL;
 
 int main(int argc, char **argv)
@@ -174,6 +194,7 @@ int main(int argc, char **argv)
   itti_send_msg_to_task(TASK_CUUP_E1, 0, msg);
   LOG_D(E1AP, "Send E1AP REGISTER REQ to TASK_CUUP_E1\n");
 
+  get_common_option(uniqCfg);
   #ifdef E2_AGENT
   //////////////////////////////////
   //////////////////////////////////

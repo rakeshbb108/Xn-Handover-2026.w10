@@ -61,7 +61,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-
+#include "common/ngran_types.h"
 
 #include "telnetsrv_phycmd.h"
 #include "telnetsrv_proccmd.h"
@@ -629,6 +629,7 @@ int process_command(char *buf, int iteration)
 }
 
 void run_telnetsrv(void) {
+  const ngran_node_t node_type = get_node_type();
   int sock;
   char buf[TELNET_MAX_MSGLENGTH];
   struct sockaddr cli_addr;
@@ -636,6 +637,7 @@ void run_telnetsrv(void) {
   int readc, filled;
   int status;
   int optval = 1;
+  int plen = 0;
   char prompt[sizeof(TELNET_PROMPT_PREFIX)+10];
   pthread_setname_np(pthread_self(), "telnet");
   set_sched(pthread_self(),0,telnetparams.priority);
@@ -680,7 +682,10 @@ void run_telnetsrv(void) {
     fprintf(stderr,"[TELNETSRV] Error %s on listen call\n",strerror(errno));
 
   using_history();
-  int plen = sprintf(prompt, "%s_%s> ", TELNET_PROMPT_PREFIX, get_softmodem_function());
+  if(node_type == ngran_gNB_CUUP)
+    plen=sprintf(prompt,"%s_%s> ",TELNET_PROMPT_CUUP_PREFIX,GET_CUUP_FUNC);
+  if(node_type == ngran_gNB_CUCP || node_type == ngran_gNB_DU)
+    plen=sprintf(prompt,"%s_%s> ",TELNET_PROMPT_PREFIX,get_softmodem_function());
   TELNET_LOG("\nInitializing telnet server...\n");
 
   while( (telnetparams.new_socket = accept(sock, &cli_addr, &cli_len)) ) {
@@ -764,12 +769,16 @@ void run_telnetsrv(void) {
 }
 
 void run_telnetclt(void) {
+  const ngran_node_t node_type = get_node_type();
   int sock;
   struct sockaddr_in name;
   pthread_setname_np(pthread_self(), "telnetclt");
   set_sched(pthread_self(),0,telnetparams.priority);
   char prompt[sizeof(TELNET_PROMPT_PREFIX)+10];
-  sprintf(prompt, "%s_%s> ", TELNET_PROMPT_PREFIX, get_softmodem_function());
+  if(node_type == ngran_gNB_CUUP)
+    sprintf(prompt,"%s_%s> ",TELNET_PROMPT_CUUP_PREFIX,GET_CUUP_FUNC);
+  if(node_type == ngran_gNB_CUCP || node_type == ngran_gNB_DU)
+    sprintf(prompt,"%s_%s> ",TELNET_PROMPT_PREFIX,get_softmodem_function());
   name.sin_family = AF_INET;
   struct in_addr addr;
   inet_aton("127.0.0.1", &addr) ;
@@ -903,13 +912,22 @@ int add_sharedmodules(void) {
    dynamically loaded
 */
 int telnetsrv_autoinit(void) {
+  const ngran_node_t node_type = get_node_type();
   memset(&telnetparams,0,sizeof(telnetparams));
   config_get(config_get_if(), telnetoptions, sizeofArray(telnetoptions), "telnetsrv");
   /* possibly load a exec specific shared lib */
-  char *execfunc = get_softmodem_function();
-  char libname[64];
-  sprintf(libname,"telnetsrv_%s",execfunc);
-  load_module_shlib(libname,NULL,0,NULL);
+  if(node_type == ngran_gNB_CUUP){
+    char *execfunc=GET_CUUP_FUNC;
+    char libname[64];
+    sprintf(libname,"telnetsrv_%s",execfunc);
+    load_module_shlib(libname,NULL,0,NULL);
+  }
+  if(node_type == ngran_gNB_CUCP || node_type == ngran_gNB_DU){
+    char *execfunc=get_softmodem_function();
+    char libname[64];
+    sprintf(libname,"telnetsrv_%s",execfunc);
+    load_module_shlib(libname,NULL,0,NULL);
+  }
   if(pthread_create(&telnetparams.telnet_pthread,NULL, (void *(*)(void *))run_telnetsrv, NULL) != 0) {
     fprintf(stderr,"[TELNETSRV] Error %s on pthread_create call\n",strerror(errno));
     return -1;
